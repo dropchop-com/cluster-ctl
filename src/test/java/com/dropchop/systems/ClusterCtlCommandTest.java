@@ -1,0 +1,303 @@
+package com.dropchop.systems;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
+import com.dropchop.systems.service.TerminalDetector;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.main.LaunchResult;
+import io.quarkus.test.junit.main.QuarkusMainLauncher;
+import io.quarkus.test.junit.main.QuarkusMainTest;
+
+/**
+ * End-to-end dispatch tests that preview every external command family.
+ */
+@QuarkusMainTest
+@TestProfile(ClusterCtlCommandTest.TerminalProfile.class)
+public class ClusterCtlCommandTest {
+  private static final String MULTI_CLUSTER = Path.of("src/test/resources/multi-cluster-test.yaml")
+      .toAbsolutePath().toString();
+  private static final String SINGLE_CLUSTER = Path.of("src/test/resources/single-cluster-test.yaml")
+      .toAbsolutePath().toString();
+  private static final String KEY = Path.of("src/test/resources/synthetic-key.pub")
+      .toAbsolutePath().toString();
+
+  /**
+   * Makes dispatch previews reproducible in headless test environments.
+   */
+  public static class TerminalProfile implements QuarkusTestProfile {
+    /** {@inheritDoc} */
+    @Override
+    public Set<Class<?>> getEnabledAlternatives() {
+      return Set.of(TestTerminalDetector.class);
+    }
+  }
+
+  /**
+   * Selects Konsole for dispatch tests; detector tests cover real environment selection.
+   */
+  @Alternative
+  @ApplicationScoped
+  public static class TestTerminalDetector extends TerminalDetector {
+    /** {@inheritDoc} */
+    @Override
+    public String resolve() {
+      return "konsole";
+    }
+  }
+
+  @Test
+  void showsRootUsageWithoutLoadingConfiguration(QuarkusMainLauncher launcher) {
+    LaunchResult result = launcher.launch();
+
+    assertSuccess(result);
+    assertTrue(result.getOutput().contains("Usage: cluster-ctl"), result.getOutput());
+    assertTrue(result.getOutput().contains("term            Open one SSH terminal tab"),
+        result.getOutput());
+    assertFalse(result.getOutput().contains("term, konsole"), result.getOutput());
+  }
+
+  @Test
+  void printsConfigurationAwareHelp(QuarkusMainLauncher launcher) {
+    LaunchResult result = launcher.launch("--config", MULTI_CLUSTER, "help", "beta");
+
+    assertSuccess(result);
+    assertTrue(result.getOutput().contains("Command list:"), result.getOutput());
+    assertTrue(result.getOutput().contains("cluster-ctl exec [CLUSTER] HOST_GROUP COMMAND..."),
+        result.getOutput());
+    assertTrue(result.getOutput().contains("cluster-ctl term [CLUSTER] [USER@]HOST_GROUP_OR_HOST"),
+        result.getOutput());
+    assertFalse(result.getOutput().contains("cluster-ctl term|konsole"), result.getOutput());
+    assertTrue(result.getOutput().contains("Execute a command on every host in a group."),
+        result.getOutput());
+    assertTrue(result.getOutput().contains("Cluster beta (ssh)"), result.getOutput());
+    assertTrue(result.getOutput().contains("beta-node-3"), result.getOutput());
+    assertTrue(result.getOutput().contains("jobs/batch-job"), result.getOutput());
+  }
+
+  @Test
+  void dispatchesTerminalAndExecCommands(QuarkusMainLauncher launcher) {
+    LaunchResult terminal = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "term", "beta", "node");
+    LaunchResult exec = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "exec", "beta", "nodes", "uptime -p");
+    LaunchResult hostAlias = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "exec", "alpha", "node-1", "hostname");
+
+    assertSuccess(terminal);
+    assertTrue(terminal.getOutput().contains("newSession"), terminal.getOutput());
+    assertTrue(terminal.getOutput().contains("setTitle"), terminal.getOutput());
+    assertTrue(terminal.getOutput().contains("sendText"), terminal.getOutput());
+    assertFalse(terminal.getOutput().contains("konsole --new-tab"), terminal.getOutput());
+    assertTrue(terminal.getOutput().contains("test-admin@beta-node-3.example.test"),
+        terminal.getOutput());
+    assertSuccess(exec);
+    assertTrue(exec.getOutput().matches("(?s).*\\[\\d{4}-\\d{2}-\\d{2} "
+        + "\\d{2}:\\d{2}:\\d{2} (Z|[+-]\\d{2}:\\d{2})].*"), exec.getOutput());
+    assertTrue(exec.getOutput().contains("Executing uptime -p"), exec.getOutput());
+    assertTrue(exec.getOutput().contains("on test-admin@beta-node-1.example.test"),
+        exec.getOutput());
+    assertTrue(exec.getOutput().contains(" output "), exec.getOutput());
+    assertTrue(exec.getOutput().contains("ssh test-admin@beta-node-1.example.test"),
+        exec.getOutput());
+    assertTrue(exec.getOutput().contains("'uptime -p'"), exec.getOutput());
+    assertSuccess(hostAlias);
+    assertTrue(hostAlias.getOutput().contains("test-admin@alpha-node-1.example.test"),
+        hostAlias.getOutput());
+    assertFalse(hostAlias.getOutput().contains("test-admin@alpha-node-2.example.test"),
+        hostAlias.getOutput());
+  }
+
+  @Test
+  void overridesSshLoginForTerminalGroupsAndHosts(QuarkusMainLauncher launcher) {
+    LaunchResult group = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "term", "test-user@api");
+    LaunchResult host = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "term", "beta", "test-user@beta-node-1");
+    LaunchResult configured = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "term", "api");
+
+    assertSuccess(group);
+    assertTrue(group.getOutput().contains("ssh test-user@alpha-api-1.example.test"),
+        combined(group));
+    assertTrue(group.getOutput().contains("ssh test-user@alpha-api-2.example.test"),
+        combined(group));
+    assertFalse(group.getOutput().contains("ssh test-admin@"), combined(group));
+    assertSuccess(host);
+    assertTrue(host.getOutput().contains("ssh test-user@beta-node-1.example.test"),
+        combined(host));
+    assertFalse(host.getOutput().contains("beta-node-2"), combined(host));
+    assertSuccess(configured);
+    assertTrue(configured.getOutput().contains("ssh test-admin@alpha-api-1.example.test"),
+        combined(configured));
+  }
+
+  @Test
+  void rejectsInvalidTerminalUserPrefixesBeforeDispatch(QuarkusMainLauncher launcher) {
+    for (String target : List.of("@api", "test-user@", "test-user@@api", "-bad@api",
+        "bad user@api", "bad;user@api")) {
+      LaunchResult result = launcher.launch(
+          "--config", MULTI_CLUSTER, "--dry-run", "term", "--", target);
+
+      assertEquals(2, result.exitCode(), combined(result));
+      assertFalse(result.getOutput().contains("newSession"), combined(result));
+      assertTrue(result.getErrorOutput().contains("Invalid"), combined(result));
+    }
+  }
+
+  @Test
+  void dispatchesAllSshKeyCommands(QuarkusMainLauncher launcher) {
+    LaunchResult list = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "ssh-key-list", "alpha", "nodes", "test-user");
+    LaunchResult add = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "ssh-key-add", "alpha", "nodes", KEY,
+        "test-user", "verify-required");
+    LaunchResult remove = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "ssh-key-remove", "alpha", "nodes",
+        "fixture-key", "test-user");
+
+    assertSuccess(list);
+    assertTrue(list.getOutput().contains("Authorized keys for test-user"), list.getOutput());
+    assertSuccess(add);
+    assertTrue(add.getOutput().contains("Adding authorized key for test-user"), add.getOutput());
+    assertSuccess(remove);
+    assertTrue(remove.getOutput().contains("grep -nF"), remove.getOutput());
+  }
+
+  @Test
+  void dispatchesDockerBuildAndDeployStrategies(QuarkusMainLauncher launcher) {
+    LaunchResult docker = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "docker", "pull", "db");
+    LaunchResult build = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "build", "beta", "qa", "all-apps");
+    LaunchResult deploy = launcher.launch(
+        "--config", MULTI_CLUSTER, "--dry-run", "deploy", "beta", "qa", "batch-job");
+
+    assertSuccess(docker);
+    assertTrue(docker.getOutput().contains("docker pull"), docker.getOutput());
+    assertTrue(docker.getOutput().contains("demo/database:1.0"), docker.getOutput());
+    assertSuccess(build);
+    assertTrue(build.getOutput().contains("-Dexample.feature.enabled=true"), build.getOutput());
+    assertTrue(build.getOutput().contains("beta-validation"), build.getOutput());
+    assertSuccess(deploy);
+    assertTrue(deploy.getOutput().contains("sha1sum"), deploy.getOutput());
+    assertTrue(deploy.getOutput().contains("beta-publisher.example.test"),
+        deploy.getOutput());
+  }
+
+  @Test
+  void supportsLegacyComposeAndMinimalBuildConfiguration(QuarkusMainLauncher launcher) {
+    LaunchResult docker = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "docker", "start");
+    LaunchResult build = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "build", "alpha", "qa", "library");
+    LaunchResult deploy = launcher.launch(
+        "--config", SINGLE_CLUSTER, "--dry-run", "deploy", "alpha", "qa", "anything");
+
+    assertSuccess(docker);
+    assertTrue(docker.getOutput().contains("docker-compose -f"), docker.getOutput());
+    assertTrue(docker.getOutput().contains(Path.of("src/test/resources/compose/single/docker-compose.yaml")
+        .toAbsolutePath().toString()),
+        docker.getOutput());
+    assertSuccess(build);
+    assertTrue(build.getOutput().contains("mvn -DskipTests=true clean install"),
+        build.getOutput());
+    assertFalse(build.getOutput().contains("example.feature.enabled"), build.getOutput());
+    assertEquals(2, deploy.exitCode(), combined(deploy));
+    assertTrue(deploy.getErrorOutput().contains("Unknown application"), combined(deploy));
+  }
+
+  @Test
+  void dispatchesClusterCommandsWithAnOmittedCluster(QuarkusMainLauncher launcher) {
+    List<List<String>> commands = List.of(
+        List.of("term", "node-1"),
+        List.of("exec", "node-1", "printf 'hello world'", "&&", "hostname"),
+        List.of("ssh-key-list", "node-1"),
+        List.of("ssh-key-list", "node-1", "test-user"),
+        List.of("ssh-key-add", "node-1", KEY),
+        List.of("ssh-key-add", "node-1", KEY, "verify-required"),
+        List.of("ssh-key-add", "node-1", KEY, "test-user", "verify-required"),
+        List.of("ssh-key-remove", "node-1", "old-key-comment"),
+        List.of("ssh-key-remove", "node-1", "old-key-comment", "test-user"),
+        List.of("build", "live"),
+        List.of("build", "live", "service"),
+        List.of("deploy", "live", "service-api"));
+    for (List<String> command : commands) {
+      List<String> implicitArguments = new ArrayList<>(List.of("--config", MULTI_CLUSTER, "--dry-run"));
+      implicitArguments.addAll(command);
+      List<String> explicitArguments = new ArrayList<>(implicitArguments);
+      explicitArguments.add(4, "alpha");
+      LaunchResult implicit = launcher.launch(implicitArguments.toArray(String[]::new));
+      LaunchResult explicit = launcher.launch(explicitArguments.toArray(String[]::new));
+
+      assertSuccess(implicit);
+      assertSuccess(explicit);
+      // Timestamps may cross a second boundary between the two launches.
+      assertEquals(explicit.getOutput().replaceAll("\\[\\d{4}-\\d{2}-\\d{2} [^]]+]", "[time]"),
+          implicit.getOutput().replaceAll("\\[\\d{4}-\\d{2}-\\d{2} [^]]+]", "[time]"),
+          String.join(" ", command));
+    }
+  }
+
+  @Test
+  void usesConfiguredDefaultAndAllowsAnExplicitOverride(QuarkusMainLauncher launcher) {
+    String config = Path.of("src/test/resources/default-secondary-cluster.yaml").toAbsolutePath().toString();
+    LaunchResult implicit = launcher.launch(
+        "--config", config, "--dry-run", "exec", "node-1", "hostname");
+    LaunchResult explicit = launcher.launch(
+        "--config", config, "--dry-run", "exec", "alpha", "node-1", "hostname");
+
+    assertSuccess(implicit);
+    assertTrue(implicit.getOutput().contains("test-admin@beta-node-1.example.test"), combined(implicit));
+    assertFalse(implicit.getOutput().contains("test-admin@alpha-node-1.example.test"), combined(implicit));
+    assertSuccess(explicit);
+    assertTrue(explicit.getOutput().contains("test-admin@alpha-node-1.example.test"), combined(explicit));
+    assertFalse(explicit.getOutput().contains("test-admin@beta-node-1.example.test"), combined(explicit));
+  }
+
+  @Test
+  void rejectsIncompleteAndExtraArgumentsBeforeDispatch(QuarkusMainLauncher launcher) {
+    List<List<String>> commands = List.of(
+        List.of("term", "alpha"),
+        List.of("exec", "alpha", "node-1"),
+        List.of("ssh-key-list", "alpha"),
+        List.of("ssh-key-add", "alpha", "node-1"),
+        List.of("ssh-key-remove", "alpha", "node-1"),
+        List.of("build", "alpha"),
+        List.of("deploy", "alpha", "live"),
+        List.of("term", "node-1", "extra"),
+        List.of("ssh-key-list", "node-1", "test-admin", "extra"),
+        List.of("build", "live", "service", "extra"),
+        List.of("deploy", "live", "service-api", "extra"));
+    for (List<String> command : commands) {
+      List<String> arguments = new ArrayList<>(List.of("--config", MULTI_CLUSTER, "--dry-run"));
+      arguments.addAll(command);
+      LaunchResult result = launcher.launch(arguments.toArray(String[]::new));
+
+      assertEquals(2, result.exitCode(), combined(result));
+      assertTrue(result.getErrorOutput().contains("Usage: cluster-ctl " + command.getFirst()),
+          combined(result));
+      assertFalse(result.getOutput().contains("$ "), combined(result));
+    }
+  }
+
+  private static void assertSuccess(LaunchResult result) {
+    assertEquals(0, result.exitCode(), combined(result));
+  }
+
+  private static String combined(LaunchResult result) {
+    return result.getOutput() + System.lineSeparator() + result.getErrorOutput();
+  }
+}

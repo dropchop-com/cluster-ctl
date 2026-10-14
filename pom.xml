@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.dropchop.systems</groupId>
+  <artifactId>cluster-ctl</artifactId>
+  <version>0.1.0</version>
+  <packaging>quarkus</packaging>
+
+  <properties>
+    <compiler-plugin.version>3.15.0</compiler-plugin.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
+    <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
+    <quarkus.platform.version>3.40.1</quarkus.platform.version>
+    <skipITs>true</skipITs>
+    <surefire-plugin.version>3.5.6</surefire-plugin.version>
+    <native.binary.path>${project.build.directory}/cluster-ctl</native.binary.path>
+    <release.platform>unsupported</release.platform>
+    <release.github.repository>dropchop-com/cluster-ctl</release.github.repository>
+    <release.github.skip>false</release.github.skip>
+    <release.dry-run>false</release.dry-run>
+    <release.packages.skip>true</release.packages.skip>
+    <release.repository.id>github</release.repository.id>
+    <release.repository.url>https://maven.pkg.github.com/dropchop-com/cluster-ctl</release.repository.url>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>${quarkus.platform.group-id}</groupId>
+        <artifactId>${quarkus.platform.artifact-id}</artifactId>
+        <version>${quarkus.platform.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-picocli</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>${quarkus.platform.group-id}</groupId>
+        <artifactId>quarkus-maven-plugin</artifactId>
+        <version>${quarkus.platform.version}</version>
+        <extensions>true</extensions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${compiler-plugin.version}</version>
+        <configuration>
+          <parameters>true</parameters>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire-plugin.version}</version>
+        <configuration>
+          <argLine>@{argLine}</argLine>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            <maven.home>${maven.home}</maven.home>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>${surefire-plugin.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <argLine>@{argLine}</argLine>
+          <systemPropertyVariables>
+            <native.image.path>${native.binary.path}</native.image.path>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            <maven.home>${maven.home}</maven.home>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Platform profiles describe the host, not a cross-compilation target. -->
+    <profile>
+      <id>host-linux-amd64</id>
+      <activation><os><name>Linux</name><arch>amd64</arch></os></activation>
+      <properties>
+        <release.platform>linux-amd64</release.platform>
+        <release.container-build>true</release.container-build>
+      </properties>
+    </profile>
+    <profile>
+      <id>host-linux-arm64</id>
+      <activation><os><name>Linux</name><arch>aarch64</arch></os></activation>
+      <properties>
+        <release.platform>linux-arm64</release.platform>
+        <release.container-build>true</release.container-build>
+      </properties>
+    </profile>
+    <profile>
+      <id>host-macos-arm64</id>
+      <activation><os><family>mac</family><arch>aarch64</arch></os></activation>
+      <properties>
+        <release.platform>macos-arm64</release.platform>
+        <release.container-build>false</release.container-build>
+      </properties>
+    </profile>
+    <profile>
+      <id>native-release</id>
+      <properties>
+        <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+        <quarkus.native.container-build>${release.container-build}</quarkus.native.container-build>
+        <quarkus.native.native-image-xmx>4g</quarkus.native.native-image-xmx>
+        <quarkus.native.builder-image>quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25</quarkus.native.builder-image>
+        <skipITs>false</skipITs>
+        <release.archive>${project.build.directory}/release/cluster-ctl-${project.version}-${release.platform}.tar.gz</release.archive>
+        <!-- Skip the JVM lifecycle artifact; deploy-file publishes the native archive. -->
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>validate-native-host</id>
+                <phase>validate</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <fail message="Supported native release hosts: Linux amd64/aarch64 and macOS aarch64.">
+                      <condition><equals arg1="${release.platform}" arg2="unsupported"/></condition>
+                    </fail>
+                  </target>
+                </configuration>
+              </execution>
+              <execution>
+                <id>sign-macos-native</id>
+                <phase>package</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <exec executable="codesign" osfamily="mac" failonerror="true">
+                      <arg value="--force"/><arg value="--sign"/><arg value="-"/>
+                      <arg value="${native.binary.path}"/>
+                    </exec>
+                    <exec executable="codesign" osfamily="mac" failonerror="true">
+                      <arg value="--verify"/>
+                      <arg value="${native.binary.path}"/>
+                    </exec>
+                  </target>
+                </configuration>
+              </execution>
+              <execution>
+                <id>verify-native-release</id>
+                <phase>verify</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <exec executable="${native.binary.path}" failonerror="true" outputproperty="native.version">
+                      <arg value="--version"/>
+                    </exec>
+                    <fail message="Native executable version does not match the Maven project version.">
+                      <condition><not><equals arg1="${native.version}" arg2="cluster-ctl ${project.version}" trim="true"/></not></condition>
+                    </fail>
+                    <exec executable="${native.binary.path}" failonerror="true">
+                      <arg value="--help"/>
+                    </exec>
+                    <exec executable="${native.binary.path}" failonerror="true">
+                      <arg value="--config"/><arg value="${project.basedir}/config.example.yaml"/>
+                      <arg value="--dry-run"/><arg value="exec"/><arg value="host-1"/><arg value="hostname"/>
+                    </exec>
+                    <checksum file="${release.archive}" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" forceOverwrite="true"/>
+                    <!-- Maven checksum resources contain just the digest. -->
+                    <checksum file="${release.archive}" algorithm="SHA-256" property="release.archive.sha256"/>
+                    <echo file="${release.archive}.sha256.maven" message="${release.archive.sha256}"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <version>3.8.0</version>
+            <executions>
+              <execution>
+                <id>native-archive</id>
+                <phase>package</phase>
+                <goals><goal>single</goal></goals>
+                <configuration>
+                  <descriptors><descriptor>src/assembly/native.xml</descriptor></descriptors>
+                  <outputDirectory>${project.build.directory}/release</outputDirectory>
+                  <finalName>cluster-ctl-${project.version}</finalName>
+                  <attach>false</attach>
+                  <tarLongFileMode>posix</tarLongFileMode>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-install-plugin</artifactId>
+            <version>3.1.4</version>
+          </plugin>
+          <plugin>
+            <artifactId>maven-deploy-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>publish-native-archive</id>
+                <phase>deploy</phase>
+                <goals><goal>deploy-file</goal></goals>
+                <configuration>
+                  <skip>${release.packages.skip}</skip>
+                  <repositoryId>${release.repository.id}</repositoryId>
+                  <url>${release.repository.url}</url>
+                  <groupId>${project.groupId}</groupId>
+                  <artifactId>cluster-ctl-native</artifactId>
+                  <version>${project.version}</version>
+                  <packaging>tar.gz</packaging>
+                  <classifier>${release.platform}</classifier>
+                  <file>${release.archive}</file>
+                  <files>${release.archive}.sha256.maven</files>
+                  <classifiers>${release.platform}</classifiers>
+                  <types>tar.gz.sha256</types>
+                  <generatePom>true</generatePom>
+                  <retryFailedDeploymentCount>3</retryFailedDeploymentCount>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.6.3</version>
+            <executions>
+              <execution>
+                <id>publish-github-release</id>
+                <phase>deploy</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <skip>${release.github.skip}</skip>
+                  <executable>sh</executable>
+                  <arguments>
+                    <argument>${project.basedir}/scripts/publish-release.sh</argument>
+                    <argument>${project.version}</argument>
+                    <argument>${project.build.directory}/release</argument>
+                    <argument>${release.github.repository}</argument>
+                    <argument>${release.dry-run}</argument>
+                    <argument>${release.platform}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>github-packages</id>
+      <properties><release.packages.skip>false</release.packages.skip></properties>
+    </profile>
+    <profile>
+      <id>release-preview</id>
+      <activation>
+        <property><name>release.dry-run</name><value>true</value></property>
+      </activation>
+      <properties>
+        <release.dry-run>true</release.dry-run>
+        <release.packages.skip>true</release.packages.skip>
+      </properties>
+    </profile>
+    <profile>
+      <id>native</id>
+      <activation>
+        <property>
+          <name>native</name>
+        </property>
+      </activation>
+      <properties>
+        <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
+        <skipITs>false</skipITs>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+      </properties>
+    </profile>
+  </profiles>
+</project>

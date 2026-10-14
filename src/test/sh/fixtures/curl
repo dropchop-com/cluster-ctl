@@ -1,0 +1,21 @@
+#!/bin/sh
+# Serve public release fixtures; reject authentication arguments entirely.
+set -eu
+installer_test_output=
+installer_test_url=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) installer_test_output=$2; shift 2 ;;
+    --proto|--proto-redir|--connect-timeout|--max-time|--retry) shift 2 ;;
+    --disable|--fail|--silent|--show-error|--location) shift ;;
+    https://github.com/dropchop-com/cluster-ctl/releases/download/*) installer_test_url=$1; shift ;;
+    *) printf 'Unexpected curl argument: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+test -n "$installer_test_output"
+test -n "$installer_test_url"
+case "$installer_test_url" in
+  */releases/download/v0.1.0/cluster-ctl-0.1.0-*) ;;
+  *) exit 1 ;;
+esac
+cp "$INSTALL_TEST_PACKAGES/${installer_test_url##*/}" "$installer_test_output"

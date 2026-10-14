@@ -1,0 +1,17 @@
+# Synthetic hosts with the same alias in two different clusters.
+remote:
+  default-cluster: beta
+  clusters:
+    - name: alpha
+      control: ssh
+    - name: beta
+      control: ssh
+  hosts:
+    - name: alpha-node-1.example.test
+      cluster: alpha
+      aliases: [node-1]
+      ssh-user: test-admin
+    - name: beta-node-1.example.test
+      cluster: beta
+      aliases: [node-1]
+      ssh-user: test-admin

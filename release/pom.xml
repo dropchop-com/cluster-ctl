@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Publish a complete set of archives built locally on their respective hosts. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.dropchop.systems</groupId>
+  <artifactId>cluster-ctl-native</artifactId>
+  <version>0.1.0</version>
+  <packaging>pom</packaging>
+  <properties>
+    <release.directory>${project.basedir}/../target/release</release.directory>
+    <release.github.repository>dropchop-com/cluster-ctl</release.github.repository>
+    <release.github.skip>false</release.github.skip>
+    <release.dry-run>false</release.dry-run>
+    <release.packages.skip>true</release.packages.skip>
+    <release.repository.id>github</release.repository.id>
+    <release.repository.url>https://maven.pkg.github.com/dropchop-com/cluster-ctl</release.repository.url>
+    <release.prefix>${release.directory}/cluster-ctl-${project.version}</release.prefix>
+    <maven.install.skip>true</maven.install.skip>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>verify-release-checksums</id>
+            <phase>verify</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <checksum file="${release.prefix}-linux-amd64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.linux-amd64"/>
+                <checksum file="${release.prefix}-linux-arm64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.linux-arm64"/>
+                <checksum file="${release.prefix}-macos-arm64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.macos-arm64"/>
+                <fail message="Release archives/checksums are missing or invalid. Build and collect all three targets before deploying.">
+                  <condition>
+                    <not><and>
+                      <equals arg1="${checksum.linux-amd64}" arg2="true"/>
+                      <equals arg1="${checksum.linux-arm64}" arg2="true"/>
+                      <equals arg1="${checksum.macos-arm64}" arg2="true"/>
+                    </and></not>
+                  </condition>
+                </fail>
+                <!-- Publish digest-only sidecars while preserving local sha256sum files. -->
+                <mkdir dir="${project.build.directory}/checksums"/>
+                <checksum file="${release.prefix}-linux-amd64.tar.gz" algorithm="SHA-256" property="hash.linux-amd64"/>
+                <checksum file="${release.prefix}-linux-arm64.tar.gz" algorithm="SHA-256" property="hash.linux-arm64"/>
+                <checksum file="${release.prefix}-macos-arm64.tar.gz" algorithm="SHA-256" property="hash.macos-arm64"/>
+                <echo file="${project.build.directory}/checksums/linux-amd64.sha256" message="${hash.linux-amd64}"/>
+                <echo file="${project.build.directory}/checksums/linux-arm64.sha256" message="${hash.linux-arm64}"/>
+                <echo file="${project.build.directory}/checksums/macos-arm64.sha256" message="${hash.macos-arm64}"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-install-plugin</artifactId>
+        <version>3.1.4</version>
+      </plugin>
+      <plugin>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>publish-all-native-archives</id>
+            <phase>deploy</phase>
+            <goals><goal>deploy-file</goal></goals>
+            <configuration>
+              <skip>${release.packages.skip}</skip>
+              <repositoryId>${release.repository.id}</repositoryId>
+              <url>${release.repository.url}</url>
+              <groupId>${project.groupId}</groupId>
+              <artifactId>${project.artifactId}</artifactId>
+              <version>${project.version}</version>
+              <packaging>tar.gz</packaging>
+              <classifier>linux-amd64</classifier>
+              <file>${release.prefix}-linux-amd64.tar.gz</file>
+              <files>${project.build.directory}/checksums/linux-amd64.sha256,${release.prefix}-linux-arm64.tar.gz,${project.build.directory}/checksums/linux-arm64.sha256,${release.prefix}-macos-arm64.tar.gz,${project.build.directory}/checksums/macos-arm64.sha256</files>
+              <classifiers>linux-amd64,linux-arm64,linux-arm64,macos-arm64,macos-arm64</classifiers>
+              <types>tar.gz.sha256,tar.gz,tar.gz.sha256,tar.gz,tar.gz.sha256</types>
+              <generatePom>true</generatePom>
+              <retryFailedDeploymentCount>3</retryFailedDeploymentCount>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.6.3</version>
+        <executions>
+          <execution>
+            <id>publish-github-release</id>
+            <phase>deploy</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <skip>${release.github.skip}</skip>
+              <executable>sh</executable>
+              <arguments>
+                <argument>${project.basedir}/../scripts/publish-release.sh</argument>
+                <argument>${project.version}</argument>
+                <argument>${release.directory}</argument>
+                <argument>${release.github.repository}</argument>
+                <argument>${release.dry-run}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+    <profile>
+      <id>github-packages</id>
+      <properties><release.packages.skip>false</release.packages.skip></properties>
+    </profile>
+    <profile>
+      <id>release-preview</id>
+      <activation>
+        <property><name>release.dry-run</name><value>true</value></property>
+      </activation>
+      <properties>
+        <release.dry-run>true</release.dry-run>
+        <release.packages.skip>true</release.packages.skip>
+      </properties>
+    </profile>
+  </profiles>
+</project>

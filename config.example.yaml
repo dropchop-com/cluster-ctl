@@ -1,0 +1,27 @@
+# Copy this file and replace the example hosts and paths with your own settings.
+local:
+  build:
+    type: maven
+    projects: []
+  docker:
+    compose: docker-compose.yaml
+    repo-token: "${CLUSTER_CTL_LOCAL_DOCKER_REPO_TOKEN:-}"
+    images: []
+remote:
+  default-cluster: c1
+  clusters:
+    - name: c1
+      control: ssh
+  environments: []
+  hosts:
+    - name: host-1.example.test
+      cluster: c1
+      aliases: [host-1]
+      ssh-user: root
+  groups:
+    - name: hosts
+      cluster: c1
+      hosts: [host-1]
+apps:
+  project-roots: []
+  artifacts: []

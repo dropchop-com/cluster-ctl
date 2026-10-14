@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stand-in executable for installer tests, never a release artifact.
+printf 'cluster-ctl 0.1.0\n'

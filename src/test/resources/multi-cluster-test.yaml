@@ -1,0 +1,88 @@
+# Synthetic multi-cluster fixtures; no private environment data or credentials.
+local:
+  build:
+    type: maven
+    projects:
+      - name: library
+        aliases: [all-apps]
+        path: ~/example-workspace/library
+        arguments: [-DskipTests=true, -Dexample.feature.enabled=true, clean, install]
+      - name: service
+        aliases: [all-apps]
+        path: ~/example-workspace/service
+        arguments: [-P, "{cluster}-{build-environment}", clean, install]
+  docker:
+    compose: compose/multi/docker-compose.yaml
+    images:
+      - url: registry.example.test/demo/database:1.0
+        aliases: [db]
+remote:
+  default-cluster: alpha
+  clusters:
+    - name: alpha
+      control: ssh
+    - name: beta
+      control: ssh
+  environments:
+    - name: live
+      cluster: alpha
+      build-environment: release
+      deploy:
+        type: scp
+        host: alpha-publisher.example.test
+        user: test-publisher
+        path: /srv/example-deploy
+        checksum: sha1
+    - name: qa
+      cluster: beta
+      build-environment: validation
+      deploy:
+        type: scp
+        host: beta-publisher.example.test
+        user: test-publisher
+        path: /srv/example-deploy
+        checksum: sha1
+  hosts:
+    - name: alpha-node-1.example.test
+      cluster: alpha
+      aliases: [alpha-node-1, node-1]
+      ssh-user: test-admin
+    - name: alpha-api-1.example.test
+      cluster: alpha
+      aliases: [alpha-api-1, api-1]
+      ssh-user: test-admin
+    - name: alpha-api-2.example.test
+      cluster: alpha
+      aliases: [alpha-api-2, api-2]
+      ssh-user: test-admin
+    - name: beta-node-1.example.test
+      cluster: beta
+      aliases: [beta-node-1]
+      ssh-user: test-admin
+    - name: beta-node-2.example.test
+      cluster: beta
+      aliases: [beta-node-2]
+      ssh-user: test-admin
+    - name: beta-node-3.example.test
+      cluster: beta
+      aliases: [beta-node-3]
+      ssh-user: test-admin
+  groups:
+    - name: api
+      cluster: alpha
+      hosts: [alpha-api-1, alpha-api-2]
+    - name: nodes
+      cluster: beta
+      aliases: [node]
+      hosts: [beta-node-1, beta-node-2, beta-node-3]
+apps:
+  artifacts:
+    - name: service-api
+      group: applications
+      build-output-path: ~/example-workspace/service/target
+      file-name: "{cluster}-{environment}-service-api-1.0.jar"
+    - name: batch-job
+      group: jobs
+      clusters: [beta]
+      build-output-path: ~/example-workspace/batch/target
+      file-name: "{cluster}-{environment}-batch-job-1.0.jar"

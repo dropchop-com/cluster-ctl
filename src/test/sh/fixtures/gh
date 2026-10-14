@@ -1,0 +1,11 @@
+#!/bin/sh
+# Record publisher operations without contacting GitHub or reading credentials.
+set -eu
+printf '%s\n' "$*" >> "$PUBLISH_TEST_LOG"
+case "$1 $2" in
+  'auth status') ;;
+  'repo view') printf '%s\n' "${PUBLISH_TEST_VISIBILITY:-PUBLIC}" ;;
+  'release create') [ "${PUBLISH_TEST_FAIL_CREATE:-false}" = false ] ;;
+  'release edit') ;;
+  *) exit 1 ;;
+esac

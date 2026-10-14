@@ -1,0 +1,7 @@
+#!/bin/sh
+# Simulate supported and unsupported hosts without cross-compiling fixtures.
+case "$1" in
+  -s) printf '%s\n' "$INSTALL_TEST_OS" ;;
+  -m) printf '%s\n' "$INSTALL_TEST_ARCH" ;;
+  *) exit 1 ;;
+esac

@@ -75,37 +75,26 @@ git clone https://github.com/dropchop-com/klipingmm.git
 ```
 Add to your environment `.zshrc` or `.bashrc`:
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
 export KLIPING_MM_ROOT="$HOME/projects/mm/klipingmm"
 alias cptm-ctl=CLUSTER_CTL_CONF_PATH="${KLIPING_MM_ROOT}/system/client/cptm.yaml cluster-ctl"
-```
-
-If the repository is already cloned, only the `export` is needed. Add it to
-`~/.bashrc` or `~/.zshrc` to keep the config path across shell sessions.
-
-If `KLIPING_MM_ROOT` already points to your checkout (for example,
-`~/projects/mm/klipingmm`), use it instead:
-
-```sh
-export CLUSTER_CTL_CONF_PATH="${KLIPING_MM_ROOT:?Set KLIPING_MM_ROOT to your checkout}/system/client/cptm.yaml"
-cluster-ctl help
 ```
 
 ### Dropchop
 
 For DC, clone the `systems` repository under `~/projects/dc`. Its client config
-is in `~/projects/dc/systems/client/dc.yaml`; no dedicated checkout-root
-environment variable is needed:
+is in `~/projects/dc/systems/client/dc.yaml`.
 
+Set up the project if not already:
 ```sh
 mkdir -p "$HOME/projects/dc"
 cd "$HOME/projects/dc"
 git clone https://github.com/dropchop-com/systems.git
-export CLUSTER_CTL_CONF_PATH="$HOME/projects/dc/systems/client/dc.yaml"
-cluster-ctl help
 ```
-
-If already cloned, only the `export` is needed. Add the desired config-path export to `~/.bashrc` or `~/.zshrc` to select CPTM or DC in future shell sessions.
+Add to your environment `.zshrc` or `.bashrc`:
+```sh
+export DROPCHOP_SYS_ROOT="$HOME/projects/dc/systems"
+alias cptm-ctl=CLUSTER_CTL_CONF_PATH="${DROPCHOP_SYS_ROOT}/system/client/dc.yaml cluster-ctl"
+```
 
 ## Commands
 

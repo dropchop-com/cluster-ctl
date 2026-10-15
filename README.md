@@ -12,13 +12,9 @@ GitHub Release assets, verifies SHA-256 and the executable version, then
 installs `cluster-ctl` into `~/.local/bin`. No GitHub token, Maven, or Java is
 needed. Intel macOS is not supported.
 
-```bash
-(
-  set -o pipefail
-  curl -fsSL --proto '=https' \
-    https://raw.githubusercontent.com/dropchop-com/cluster-ctl/master/scripts/install.sh \
+```sh
+curl -fsSL https://raw.githubusercontent.com/dropchop-com/cluster-ctl/master/scripts/install.sh \
     | sh -s -- --version 0.1.0
-)
 export PATH="$HOME/.local/bin:$PATH"
 cluster-ctl --version
 ```
@@ -27,19 +23,15 @@ Add the `PATH` export to `~/.bashrc` or `~/.zshrc` if needed; the installer does
 not edit shell startup files. To review the installer first, download it to a
 file, inspect it, then run `sh install.sh --version 0.1.0`.
 
-Use `--install-dir /absolute/path` or `CLUSTER_CTL_INSTALL_DIR` to choose a
-different binary directory. The example YAML is saved under
-`${XDG_CONFIG_HOME:-$HOME/.config}/cluster-ctl/config.example.yaml`, or
-`CLUSTER_CTL_CONFIG_DIR` if set. Existing examples and active configurations
+Use `--install-dir /absolute/path` to choose a
+different binary directory. Existing examples and active configurations
 are left untouched; successful reinstalls replace only the executable.
 
-`CLUSTER_CTL_RELEASE_URL` can select an HTTPS mirror with the same layout:
-`BASE/vVERSION/cluster-ctl-VERSION-PLATFORM.tar.gz` and its `.sha256` sidecar.
 Requirements are `curl`, `tar`, and `sha256sum` or `shasum`; Linux needs glibc
 2.34 or newer. Installation becomes available once the source repository is
 public and the selected version/platform has a published GitHub Release.
 
-## Configuration
+## Setup
 
 ### General
 
@@ -47,91 +39,45 @@ The installed executable is named **`cluster-ctl`** on every supported platform.
 Start with the installed example or [config.example.yaml](config.example.yaml),
 copy it to your own YAML file, and customize its hosts and paths:
 
-```bash
+```sh
 cluster-ctl help
 cluster-ctl --dry-run exec host-1 hostname
 ```
 
 Set the path for each invocation:
 
-```bash
+```sh
 CLUSTER_CTL_CONF_PATH=/path/cluster-ctl/config.yaml cluster-ctl help
 ```
 
 This is suitable for a shell alias:
 
-```bash
+```sh
 alias cluster-ctl-dev='CLUSTER_CTL_CONF_PATH=/etc/cluster-ctl/dev.yaml cluster-ctl'
 ```
 
 For one-off use, `--config` or `-c` takes precedence:
 
-```bash
+```sh
 cluster-ctl --config ./config.yaml help c1
 ```
-
-Configuration strings support `${NAME}` and `${NAME:-fallback}` environment
-expansion. A leading `~/` is expanded for filesystem paths. Relative paths,
-including Docker Compose files, are resolved relative to the YAML file rather
-than the current directory.
-
-Terminal selection is automatic; `local.terminal` has been removed from YAML configuration.
-`CLUSTER_CTL_LOCAL_TERMINAL` forces a strategy (`konsole`, `tmux`, `kitty`, or
-`iterm`), taking precedence over detection. When it is unset or blank, the CLI
-first detects tmux from a nonblank `TMUX` variable, then
-detects Kitty from `KITTY_WINDOW_ID`, `KITTY_PID`, `KITTY_LISTEN_ON`,
-`TERM=xterm-kitty`, or `TERM_PROGRAM=kitty`; otherwise, it detects Konsole from
-`KONSOLE_DBUS_SERVICE` and `KONSOLE_DBUS_WINDOW`. Detection precedence is tmux,
-Kitty, then Konsole, so a tmux session wins over its enclosing terminal.
-If no terminal is detected, `term` reports an
-error asking for an explicit override; other commands still work.
-
-```bash
-CLUSTER_CTL_LOCAL_TERMINAL=kitty cluster-ctl --config ./config.yaml term support
-```
-
-Supply a Docker repository token only when registry login is needed; keep it
-outside the YAML file:
-
-```bash
-CLUSTER_CTL_LOCAL_DOCKER_REPO_TOKEN=ghp_example \
-CLUSTER_CTL_CONF_PATH=./config.yaml \
-cluster-ctl docker pull
-```
-
-The top-level sections are:
-
-- `commands`: command names enabled for this installation. Omit or leave empty
-  to allow all installed commands.
-- `local`: build strategy/projects and Docker settings.
-- `remote`: clusters, environments, deployment targets, hosts, and composable
-  host groups.
-- `apps`: source roots and artifacts selectable by name, alias, or group.
-
-Hosts and groups are cluster-scoped, so both c1 and c2 may define a `hosts`
-group. A group can list hosts directly and compose other groups. Cycles,
-duplicate aliases, invalid environment mappings, and unknown config fields are
-rejected while loading. Define short host names in `remote.hosts[].aliases`,
-such as `host-1` or `support-1`, to avoid repeating cluster prefixes. Host aliases
-can be used anywhere a host-group selector is accepted.
-
-Artifact paths and Maven arguments accept these runtime placeholders:
-
-- `{cluster}`
-- `{environment}`
-- `{build-environment}` for Maven arguments
 
 ### Clippitamine
 
 For CPTM, the config is available in the `klipingmm` repository. With repository
 access, clone it under `~/projects/mm` and point `cluster-ctl` to its client config:
 
-```bash
+Setup project if not already:
+```sh
 mkdir -p "$HOME/projects/mm"
 cd "$HOME/projects/mm"
 git clone https://github.com/dropchop-com/klipingmm.git
-export CLUSTER_CTL_CONF_PATH="$HOME/projects/mm/klipingmm/system/client/cptm.yaml"
-cluster-ctl help
+```
+Add to your environment `.zshrc` or `.bashrc`:
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+export KLIPING_MM_ROOT="$HOME/projects/mm/klipingmm"
+alias cptm-ctl=CLUSTER_CTL_CONF_PATH="${KLIPING_MM_ROOT}/system/client/cptm.yaml cluster-ctl"
 ```
 
 If the repository is already cloned, only the `export` is needed. Add it to
@@ -140,7 +86,7 @@ If the repository is already cloned, only the `export` is needed. Add it to
 If `KLIPING_MM_ROOT` already points to your checkout (for example,
 `~/projects/mm/klipingmm`), use it instead:
 
-```bash
+```sh
 export CLUSTER_CTL_CONF_PATH="${KLIPING_MM_ROOT:?Set KLIPING_MM_ROOT to your checkout}/system/client/cptm.yaml"
 cluster-ctl help
 ```
@@ -151,7 +97,7 @@ For DC, clone the `systems` repository under `~/projects/dc`. Its client config
 is in `~/projects/dc/systems/client/dc.yaml`; no dedicated checkout-root
 environment variable is needed:
 
-```bash
+```sh
 mkdir -p "$HOME/projects/dc"
 cd "$HOME/projects/dc"
 git clone https://github.com/dropchop-com/systems.git
@@ -209,7 +155,7 @@ prefix, each host's configured `ssh-user` is used.
 
 Examples:
 
-```bash
+```sh
 cluster-ctl help c1
 cluster-ctl term support
 cluster-ctl term operator@web
@@ -240,10 +186,61 @@ still apply.
 Use `--dry-run` while reviewing a config. It resolves selectors and prints all
 external commands without starting terminals, SSH, Docker, Maven, or SCP:
 
-```bash
+```sh
 cluster-ctl --config ./config.yaml --dry-run exec c1 support "uname -a"
 cluster-ctl --config ./config.yaml --dry-run deploy c2 test service-1
 ```
+
+Configuration strings support `${NAME}` and `${NAME:-fallback}` environment
+expansion. A leading `~/` is expanded for filesystem paths. Relative paths,
+including Docker Compose files, are resolved relative to the YAML file rather
+than the current directory.
+
+Terminal selection is automatic; `local.terminal` has been removed from YAML configuration.
+`CLUSTER_CTL_LOCAL_TERMINAL` forces a strategy (`konsole`, `tmux`, `kitty`, or
+`iterm`), taking precedence over detection. When it is unset or blank, the CLI
+first detects tmux from a nonblank `TMUX` variable, then
+detects Kitty from `KITTY_WINDOW_ID`, `KITTY_PID`, `KITTY_LISTEN_ON`,
+`TERM=xterm-kitty`, or `TERM_PROGRAM=kitty`; otherwise, it detects Konsole from
+`KONSOLE_DBUS_SERVICE` and `KONSOLE_DBUS_WINDOW`. Detection precedence is tmux,
+Kitty, then Konsole, so a tmux session wins over its enclosing terminal.
+If no terminal is detected, `term` reports an
+error asking for an explicit override; other commands still work.
+
+```sh
+CLUSTER_CTL_LOCAL_TERMINAL=kitty cluster-ctl --config ./config.yaml term support
+```
+
+Supply a Docker repository token only when registry login is needed; keep it
+outside the YAML file:
+
+```sh
+CLUSTER_CTL_LOCAL_DOCKER_REPO_TOKEN=ghp_example \
+CLUSTER_CTL_CONF_PATH=./config.yaml \
+cluster-ctl docker pull
+```
+
+The top-level sections are:
+
+- `commands`: command names enabled for this installation. Omit or leave empty
+  to allow all installed commands.
+- `local`: build strategy/projects and Docker settings.
+- `remote`: clusters, environments, deployment targets, hosts, and composable
+  host groups.
+- `apps`: source roots and artifacts selectable by name, alias, or group.
+
+Hosts and groups are cluster-scoped, so both c1 and c2 may define a `hosts`
+group. A group can list hosts directly and compose other groups. Cycles,
+duplicate aliases, invalid environment mappings, and unknown config fields are
+rejected while loading. Define short host names in `remote.hosts[].aliases`,
+such as `host-1` or `support-1`, to avoid repeating cluster prefixes. Host aliases
+can be used anywhere a host-group selector is accepted.
+
+Artifact paths and Maven arguments accept these runtime placeholders:
+
+- `{cluster}`
+- `{environment}`
+- `{build-environment}` for Maven arguments
 
 Build, test, CDI extension, and release instructions are in [DEVELOP.md](DEVELOP.md).
 

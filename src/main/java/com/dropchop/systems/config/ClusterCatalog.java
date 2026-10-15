@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -52,7 +53,7 @@ public class ClusterCatalog {
     return config.remote.clusters.stream()
         .filter(value -> value.name.equals(name))
         .findFirst()
-        .orElseThrow(() -> new CliException("Unknown cluster: " + name));
+        .orElseThrow(() -> new CliUsageException("Unknown cluster: " + name));
   }
 
   /**
@@ -70,9 +71,9 @@ public class ClusterCatalog {
     ClusterCtlConfig.Environment environment = config.remote.environments.stream()
         .filter(value -> value.name.equals(name))
         .findFirst()
-        .orElseThrow(() -> new CliException("Unknown environment: " + name));
+        .orElseThrow(() -> new CliUsageException("Unknown environment: " + name));
     if (!environment.cluster.equals(cluster)) {
-      throw new CliException(
+      throw new CliUsageException(
           "Environment " + name + " belongs to cluster " + environment.cluster + ", not " + cluster + "."
       );
     }
@@ -97,7 +98,7 @@ public class ClusterCatalog {
     if (selectedGroup.isEmpty()) {
       return findHost(config, cluster, groupName)
           .map(List::of)
-          .orElseThrow(() -> new CliException(
+          .orElseThrow(() -> new CliUsageException(
               "Unknown host group, host, or alias '" + groupName + "' in cluster " + cluster + "."
           ));
     }
@@ -133,7 +134,7 @@ public class ClusterCatalog {
       }
     }
     if (matches.isEmpty()) {
-      throw new CliException("Unknown application or application group: " + selector);
+      throw new CliUsageException("Unknown application or application group: " + selector);
     }
     return matches;
   }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 import com.dropchop.systems.config.ClusterCatalog;
 import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.strategy.TerminalRequest;
@@ -50,10 +51,10 @@ public class TerminalService {
       sshUser = group.substring(0, separator);
       group = group.substring(separator + 1);
       if (!USERNAME.matcher(sshUser).matches()) {
-        throw new CliException("Invalid SSH user: " + sshUser);
+        throw new CliUsageException("Invalid SSH user: " + sshUser);
       }
       if (group.isBlank() || group.contains("@")) {
-        throw new CliException("Invalid terminal target. Use [USER@]HOST_GROUP_OR_HOST.");
+        throw new CliUsageException("Invalid terminal target. Use [USER@]HOST_GROUP_OR_HOST.");
       }
     }
     List<ClusterCtlConfig.Host> hosts = catalog.hosts(config, cluster, group);

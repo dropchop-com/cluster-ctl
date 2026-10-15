@@ -158,7 +158,7 @@ public class SshRemoteControlStrategy implements RemoteControlStrategy {
 
   private ProcessResult run(ClusterCtlConfig.Host host, String remoteCommand, String input, boolean dryRun,
                             boolean printOut, String operation) {
-    ProcessResult result = processRunner.run(
+    ProcessResult result = processRunner.runWithOrangeStderr(
         new ProcessRequest(
             List.of("ssh", host.sshUser + "@" + host.name, "-T", remoteCommand), null, input, dryRun, printOut
         )

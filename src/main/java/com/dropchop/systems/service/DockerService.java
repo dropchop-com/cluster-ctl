@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 import com.dropchop.systems.config.ClusterCatalog;
 import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.process.ProcessRequest;
@@ -46,12 +47,21 @@ public class DockerService {
       case "start", "run" -> compose(config, List.of("up", "-d"), dryRun);
       case "stop", "kill" -> compose(config, List.of("down"), dryRun);
       case "log", "tail" -> logs(selector, dryRun);
-      default -> throw new CliException("Unknown Docker action: " + action);
+      default -> throw new CliUsageException("Unknown Docker action: " + action);
     }
   }
 
   private void pull(ClusterCtlConfig config, String selector, boolean dryRun) {
     ClusterCtlConfig.Docker docker = config.local.docker;
+    List<ClusterCtlConfig.Image> images = docker.images.stream()
+        .filter(
+            image -> selector == null || selector.isBlank()
+                || image.url.equals(selector) || image.aliases.contains(selector)
+        )
+        .toList();
+    if (images.isEmpty()) {
+      throw new CliUsageException("Unknown Docker image or alias: " + selector);
+    }
     if (docker.repoToken != null && !docker.repoToken.isBlank()) {
       requireSuccess(
           processRunner.run(
@@ -66,18 +76,9 @@ public class DockerService {
           "Docker login"
       );
     }
-    List<ClusterCtlConfig.Image> images = docker.images.stream()
-        .filter(
-            image -> selector == null || selector.isBlank()
-                || image.url.equals(selector) || image.aliases.contains(selector)
-        )
-        .toList();
-    if (images.isEmpty()) {
-      throw new CliException("Unknown Docker image or alias: " + selector);
-    }
     for (ClusterCtlConfig.Image image : images) {
       requireSuccess(
-          processRunner.run(
+          processRunner.runAttached(
               new ProcessRequest(List.of("docker", "pull", image.url), null, null, dryRun, true)
           ),
           "Docker pull"
@@ -99,7 +100,7 @@ public class DockerService {
 
   private void logs(String service, boolean dryRun) {
     if (service == null || service.isBlank()) {
-      throw new CliException("Docker log requires a container name or ID.");
+      throw new CliUsageException("Docker log requires a container name or ID.");
     }
     requireSuccess(
         processRunner.run(new ProcessRequest(List.of("docker", "logs", service, "-f"), null, null, dryRun, true)),

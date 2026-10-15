@@ -35,6 +35,17 @@ public class ConfigLoader {
   }
 
   /**
+   * Checks whether a configuration path was supplied without reading any files.
+   *
+   * @param explicitPath optional command-line path
+   * @return whether CLI, environment, or system properties select a configuration
+   */
+  public boolean isConfigured(String explicitPath) {
+    return firstNonBlank(explicitPath, System.getenv(CONFIG_PATH_ENV),
+        System.getProperty(CONFIG_PATH_PROPERTY)) != null;
+  }
+
+  /**
    * Loads configuration from an explicit path or the configured environment.
    *
    * @param explicitPath optional command-line path

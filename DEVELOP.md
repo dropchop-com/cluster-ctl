@@ -39,10 +39,12 @@ sh src/test/sh/install-test.sh
 sh src/test/sh/release-test.sh
 ```
 
-The tests launch the real Quarkus main application and cover help, Docker,
+The tests launch the real Quarkus main application and cover help routing, Docker,
 terminal, exec, all three SSH-key commands, Maven build selection, SCP deploy
 selection, aliases, multi-cluster routing, and legacy Compose behavior. All
 external commands run in dry-run mode.
+Help checks cover flag handling and inventory scope without locking in spacing
+or table-layout snapshots.
 
 The installer tests use offline fixture packages to cover sh, Bash, and Zsh,
 platform detection, token-free downloads, binary-only installation, reinstalls,
@@ -54,7 +56,7 @@ Build the JVM application:
 
 ```bash
 ./mvnw package
-java -jar target/quarkus-app/quarkus-run.jar --config ./config.example.yaml help
+java -jar target/quarkus-app/quarkus-run.jar --config ./config.example.yaml --help
 ```
 
 Build a native executable with a local GraalVM installation:

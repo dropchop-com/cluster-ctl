@@ -40,14 +40,14 @@ Start with [config.example.yaml](config.example.yaml),
 copy it to your own YAML file, and customize its hosts and paths:
 
 ```sh
-cluster-ctl help
+cluster-ctl --help
 cluster-ctl --dry-run exec host-1 hostname
 ```
 
 Set the path for each invocation:
 
 ```sh
-CLUSTER_CTL_CONF_PATH=/path/cluster-ctl/config.yaml cluster-ctl help
+CLUSTER_CTL_CONF_PATH=/path/cluster-ctl/config.yaml cluster-ctl --help
 ```
 
 This is suitable for a shell alias:
@@ -59,7 +59,7 @@ alias cluster-ctl-dev='CLUSTER_CTL_CONF_PATH=/etc/cluster-ctl/dev.yaml cluster-c
 For one-off use, `--config` or `-c` takes precedence:
 
 ```sh
-cluster-ctl --config ./config.yaml help c1
+cluster-ctl --config ./config.yaml term c1 --help
 ```
 
 ### Clippitamine
@@ -104,22 +104,39 @@ invoking Konsole window using `KONSOLE_DBUS_SERVICE` and `KONSOLE_DBUS_WINDOW`. 
 those environment variables explicitly. Dry-runs show placeholders for missing
 environment values and for session IDs returned at runtime.
 
-`cluster-ctl help [CLUSTER]` prints the syntax and description of every command
-config path: the active YAML configuration, followed by the configured cluster
-inventory.
+Use `-h` or `--help` on the CLI or any command. Every help page includes synthetic
+Examples, some using the default cluster and others selecting a cluster explicitly.
+The standalone `help` command has been removed. Help works without configuration;
+configure a YAML file to include these command-specific inventories:
+
+- `term`, `exec`, and `ssh-*`: cluster and host-group information.
+- `deploy`: applications and environments for the selected cluster.
+- `build`: environments for the selected cluster.
+
+For example, `cluster-ctl deploy c2 --help` lists only cluster `c2`'s inventory;
+`cluster-ctl deploy --help` uses the configured default cluster. No operation is
+executed when help is requested, even when other arguments are supplied.
+Incorrect arguments print an error followed by the same command help and return
+exit code 2. Runtime failures keep their error messages without printing help.
+Host-group tables remain approximately 150 characters wide; application columns
+are 25 characters each. Group names are yellow and aliases cyan.
+Usage and examples use the native invocation name from `argv[0]`, including renamed
+binaries and symlinks. Shell aliases expanded by the shell are not visible to the program.
 
 Each `exec` target is displayed in its own colored block. The header contains
 the local timestamp, exact remote command, and SSH host; an `output` delimiter
-separates that metadata from the remote process output.
+separates that metadata from the remote process output. SSH stderr is streamed
+in orange, separately from stdout, for `exec` and SSH-key operations.
 
 ```text
-cluster-ctl help [CLUSTER]
+cluster-ctl [-h|--help]
+cluster-ctl COMMAND [CLUSTER] --help
 cluster-ctl docker pull|get [IMAGE_OR_ALIAS]
 cluster-ctl docker start|run
 cluster-ctl docker stop|kill
 cluster-ctl docker log|tail CONTAINER
 cluster-ctl term [CLUSTER] [USER@]HOST_GROUP_OR_HOST
-cluster-ctl exec [CLUSTER] HOST_GROUP; otherwise, it usesEMOTE COMMAND"
+cluster-ctl exec [CLUSTER] HOST_GROUP_OR_HOST "REMOTE COMMAND"
 cluster-ctl ssh-key-list [CLUSTER] HOST_GROUP_OR_HOST [USER]
 cluster-ctl ssh-key-add [CLUSTER] HOST_GROUP_OR_HOST PUBLIC_KEY_PATH [USER] [verify-required]
 cluster-ctl ssh-key-remove [CLUSTER] HOST_GROUP_OR_HOST MATCHING_STRING [USER]
@@ -143,7 +160,7 @@ prefix, each host's configured `ssh-user` is used.
 Examples:
 
 ```sh
-cluster-ctl help c1
+cluster-ctl term c1 --help
 cluster-ctl term support
 cluster-ctl term operator@web
 cluster-ctl exec host-1 "hostname"

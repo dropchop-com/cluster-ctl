@@ -60,31 +60,87 @@ public class ClusterCtlCommandTest {
 
   @Test
   void showsRootUsageWithoutLoadingConfiguration(QuarkusMainLauncher launcher) {
-    LaunchResult result = launcher.launch();
-
-    assertSuccess(result);
-    assertTrue(result.getOutput().contains("Usage: cluster-ctl"), result.getOutput());
-    assertTrue(result.getOutput().contains("term            Open one SSH terminal tab"),
-        result.getOutput());
-    assertFalse(result.getOutput().contains("term, konsole"), result.getOutput());
+    assertSuccess(launcher.launch());
   }
 
   @Test
-  void printsConfigurationAwareHelp(QuarkusMainLauncher launcher) {
-    LaunchResult result = launcher.launch("--config", MULTI_CLUSTER, "help", "beta");
+  void helpFlagsDoNotRequireArgumentsOrExecuteOperations(QuarkusMainLauncher launcher) {
+    for (String flag : List.of("-h", "--help")) {
+      assertSuccess(launcher.launch(flag));
+      for (String command : List.of("docker", "term", "exec", "ssh-key-list", "ssh-key-add",
+          "ssh-key-remove", "build", "deploy")) {
+        LaunchResult result = launcher.launch("--dry-run", command, flag);
 
-    assertSuccess(result);
-    assertTrue(result.getOutput().contains("Command list:"), result.getOutput());
-    assertTrue(result.getOutput().contains("cluster-ctl exec [CLUSTER] HOST_GROUP COMMAND..."),
-        result.getOutput());
-    assertTrue(result.getOutput().contains("cluster-ctl term [CLUSTER] [USER@]HOST_GROUP_OR_HOST"),
-        result.getOutput());
-    assertFalse(result.getOutput().contains("cluster-ctl term|konsole"), result.getOutput());
-    assertTrue(result.getOutput().contains("Execute a command on every host in a group."),
-        result.getOutput());
-    assertTrue(result.getOutput().contains("Cluster beta (ssh)"), result.getOutput());
-    assertTrue(result.getOutput().contains("beta-node-3"), result.getOutput());
-    assertTrue(result.getOutput().contains("jobs/batch-job"), result.getOutput());
+        assertSuccess(result);
+        assertTrue(result.getOutput().contains("Examples"), combined(result));
+        assertFalse(result.getOutput().contains("$ "), combined(result));
+      }
+    }
+  }
+
+  @Test
+  void helpBypassesOperationsEvenWhenTheirArgumentsAreComplete(QuarkusMainLauncher launcher) {
+    for (List<String> command : List.of(
+        List.of("term", "beta", "nodes", "--help"),
+        List.of("exec", "beta", "nodes", "hostname", "-h"),
+        List.of("docker", "pull", "db", "--help"),
+        List.of("build", "beta", "qa", "all", "--help"),
+        List.of("deploy", "beta", "qa", "batch-job", "--help"))) {
+      List<String> arguments = new ArrayList<>(List.of("--config", MULTI_CLUSTER, "--dry-run"));
+      arguments.addAll(command);
+      LaunchResult result = launcher.launch(arguments.toArray(String[]::new));
+
+      assertSuccess(result);
+      assertTrue(result.getOutput().contains("Examples"), combined(result));
+      assertFalse(result.getOutput().contains("$ "), combined(result));
+    }
+  }
+
+  @Test
+  void helpIncludesOnlyRelevantInventoriesForTheSelectedCluster(QuarkusMainLauncher launcher) {
+    for (String command : List.of("term", "exec", "ssh-key-list", "ssh-key-add", "ssh-key-remove",
+        "build", "deploy")) {
+      LaunchResult result = launcher.launch("--config", MULTI_CLUSTER, "--dry-run", command, "beta", "--help");
+
+      assertSuccess(result);
+      String output = result.getOutput();
+      assertEquals(!command.equals("deploy"), output.contains("Cluster beta (ssh)"), combined(result));
+      assertFalse(output.contains("Cluster alpha"), combined(result));
+      assertEquals(!List.of("build", "deploy").contains(command), output.contains("Group (aliases)"),
+          combined(result));
+      assertEquals(command.equals("deploy"), output.contains("Application group"), combined(result));
+      if (command.equals("deploy")) {
+        assertTrue(output.contains("batch-job"), combined(result));
+      }
+      assertEquals(command.equals("deploy") || command.equals("build"), output.contains("Environments"),
+          combined(result));
+      if (command.equals("deploy") || command.equals("build")) {
+        assertTrue(output.contains("validation"), combined(result));
+        assertFalse(output.contains("release"), combined(result));
+      }
+      assertFalse(output.contains("$ "), combined(result));
+    }
+  }
+
+  @Test
+  void helpUsesOnlyTheConfiguredDefaultCluster(QuarkusMainLauncher launcher) {
+    for (String fixture : List.of(MULTI_CLUSTER,
+        Path.of("src/test/resources/default-secondary-cluster.yaml").toAbsolutePath().toString())) {
+      LaunchResult result = launcher.launch("--config", fixture, "--dry-run", "term", "-h");
+      assertSuccess(result);
+      String expected = fixture.equals(MULTI_CLUSTER) ? "alpha" : "beta";
+      String other = expected.equals("alpha") ? "beta" : "alpha";
+      assertTrue(result.getOutput().contains("Cluster " + expected + " (ssh) [default]"), combined(result));
+      assertFalse(result.getOutput().contains("Cluster " + other), combined(result));
+    }
+  }
+
+  @Test
+  void rejectsRemovedHelpCommandAndReportsInvalidHelpConfiguration(QuarkusMainLauncher launcher) {
+    assertEquals(2, launcher.launch("help").exitCode());
+    LaunchResult result = launcher.launch("--config", "src/test/resources/missing-config.yaml", "deploy", "--help");
+    assertEquals(2, result.exitCode(), combined(result));
+    assertTrue(result.getOutput().contains("Examples"), combined(result));
   }
 
   @Test
@@ -287,8 +343,39 @@ public class ClusterCtlCommandTest {
       LaunchResult result = launcher.launch(arguments.toArray(String[]::new));
 
       assertEquals(2, result.exitCode(), combined(result));
-      assertTrue(result.getErrorOutput().contains("Usage: cluster-ctl " + command.getFirst()),
+      assertTrue(result.getOutput().contains("Usage: cluster-ctl " + command.getFirst()),
           combined(result));
+      assertTrue(result.getOutput().contains("Examples"), combined(result));
+      assertFalse(result.getOutput().contains("$ "), combined(result));
+    }
+  }
+
+  @Test
+  void parseAndSelectorErrorsShowCommandHelpWithoutExecutingOperations(QuarkusMainLauncher launcher) {
+    for (List<String> command : List.of(
+        List.of("docker"),
+        List.of("docker", "unknown-action"),
+        List.of("docker", "pull", "unknown-image"),
+        List.of("docker", "log"),
+        List.of("term", "--unknown-option"),
+        List.of("term", "alpha", "node-1", "extra"),
+        List.of("term", "missing-host"),
+        List.of("exec", "missing-host", "hostname"),
+        List.of("ssh-key-list", "node-1", "bad user"),
+        List.of("ssh-key-add", "node-1", KEY, "verify-required", "verify-required"),
+        List.of("ssh-key-remove", "node-1", ""),
+        List.of("build", "missing-environment"),
+        List.of("build", "live", "missing-project"),
+        List.of("deploy", "live", "missing-app"))) {
+      List<String> arguments = new ArrayList<>(List.of("--config", MULTI_CLUSTER, "--dry-run"));
+      arguments.addAll(command);
+      LaunchResult result = launcher.launch(arguments.toArray(String[]::new));
+
+      assertEquals(2, result.exitCode(), combined(result));
+      assertTrue(result.getErrorOutput().contains("Error:"), combined(result));
+      assertTrue(result.getOutput().contains("Usage: cluster-ctl " + command.getFirst()), combined(result));
+      assertTrue(result.getOutput().contains("Examples"), combined(result));
+      assertFalse(combined(result).contains("CliUsageException"), combined(result));
       assertFalse(result.getOutput().contains("$ "), combined(result));
     }
   }

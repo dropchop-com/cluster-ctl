@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 import com.dropchop.systems.config.ClusterCatalog;
 import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.process.ProcessRequest;
@@ -80,7 +81,7 @@ public class MavenBuildStrategy implements BuildStrategy {
         .filter(project -> project.name.equals(selector) || project.aliases.contains(selector))
         .toList();
     if (selected.isEmpty()) {
-      throw new CliException("Unknown build project or alias: " + selector);
+      throw new CliUsageException("Unknown build project or alias: " + selector);
     }
     return selected;
   }

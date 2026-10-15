@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 import com.dropchop.systems.config.ClusterCatalog;
 import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.remote.RemoteControlStrategy;
@@ -55,7 +56,7 @@ public class HostService {
    */
   public void execute(ClusterCtlConfig config, String cluster, String group, String command, boolean dryRun) {
     if (command == null || command.isBlank()) {
-      throw new CliException("Remote command must not be blank.");
+      throw new CliUsageException("Remote command must not be blank.");
     }
     RemoteControlStrategy control = control(config, cluster);
     for (ClusterCtlConfig.Host host : catalog.hosts(config, cluster, group)) {
@@ -121,7 +122,7 @@ public class HostService {
     validateUser(user);
     if (matchingString == null || matchingString.isBlank()
         || matchingString.contains("\n") || matchingString.contains("\r")) {
-      throw new CliException("Matching string must be non-empty and single-line.");
+      throw new CliUsageException("Matching string must be non-empty and single-line.");
     }
     RemoteControlStrategy control = control(config, cluster);
     for (ClusterCtlConfig.Host host : catalog.hosts(config, cluster, group)) {
@@ -155,30 +156,30 @@ public class HostService {
 
   private void validateUser(String user) {
     if (user == null || !USERNAME.matcher(user).matches()) {
-      throw new CliException("Invalid SSH user: " + user);
+      throw new CliUsageException("Invalid SSH user: " + user);
     }
   }
 
   private String readPublicKey(Path path) {
     try {
       if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
-        throw new CliException("Public key is not a readable file: " + path);
+        throw new CliUsageException("Public key is not a readable file: " + path);
       }
       List<String> lines = Files.readAllLines(path).stream()
           .filter(line -> !line.isBlank())
           .toList();
       if (lines.size() != 1) {
-        throw new CliException("Public key file must contain exactly one non-empty line.");
+        throw new CliUsageException("Public key file must contain exactly one non-empty line.");
       }
       String key = lines.getFirst().stripTrailing();
       String[] parts = key.split("\\s+", 3);
       if (parts.length < 2) {
-        throw new CliException("Invalid SSH public key: " + path);
+        throw new CliUsageException("Invalid SSH public key: " + path);
       }
       Base64.getDecoder().decode(parts[1]);
       return key;
     } catch (IllegalArgumentException exception) {
-      throw new CliException("Invalid SSH public key: " + path, exception);
+      throw new CliUsageException("Invalid SSH public key: " + path, exception);
     } catch (IOException exception) {
       throw new CliException("Unable to read public key " + path
           + ": " + exception.getMessage(), exception);

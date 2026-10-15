@@ -1,10 +1,12 @@
 package com.dropchop.systems;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
 import com.dropchop.systems.cli.CliException;
+import com.dropchop.systems.cli.CliUsageException;
 import com.dropchop.systems.cli.ClusterCtlVersion;
 import com.dropchop.systems.config.ClusterCatalog;
 import com.dropchop.systems.config.ClusterCtlConfig;
@@ -13,7 +15,6 @@ import com.dropchop.systems.config.ConfigLoader;
 import com.dropchop.systems.service.BuildService;
 import com.dropchop.systems.service.DeploymentService;
 import com.dropchop.systems.service.DockerService;
-import com.dropchop.systems.service.HelpService;
 import com.dropchop.systems.service.HostService;
 import com.dropchop.systems.service.TerminalService;
 
@@ -38,7 +39,6 @@ import picocli.CommandLine.Model.CommandSpec;
     mixinStandardHelpOptions = true,
     versionProvider = ClusterCtlVersion.class,
     subcommands = {
-        ClusterCtlCommand.HelpCommand.class,
         ClusterCtlCommand.DockerCommand.class,
         ClusterCtlCommand.TermCommand.class,
         ClusterCtlCommand.ExecCommand.class,
@@ -111,6 +111,7 @@ public class ClusterCtlCommand implements Callable<Integer> {
       int minimum,
       int maximum,
       String syntax) {
+    // Collectors accept partial input for --help; execution enforces required values here.
     boolean explicitCluster = !arguments.isEmpty() && config.remote.clusters.stream()
         .anyMatch(cluster -> cluster.name.equals(arguments.getFirst()));
     String cluster = explicitCluster ? arguments.getFirst() : config.remote.defaultCluster;
@@ -118,7 +119,8 @@ public class ClusterCtlCommand implements Callable<Integer> {
         ? arguments.subList(1, arguments.size())
         : arguments;
     if (values.size() < minimum || values.size() > maximum) {
-      throw new CliException("Usage: cluster-ctl " + command + " " + syntax);
+      String reason = values.size() < minimum ? "Missing required arguments" : "Too many arguments";
+      throw new CliUsageException(reason + " for " + command + ". Expected: " + syntax);
     }
     catalog.cluster(config, cluster);
     return new ClusterArguments(cluster, values);
@@ -130,6 +132,8 @@ public class ClusterCtlCommand implements Callable<Integer> {
       catalog.requireCommand(config, command);
       action.run(config);
       return 0;
+    } catch (CliUsageException exception) {
+      throw exception;
     } catch (ConfigException | CliException exception) {
       System.err.println("Error: " + exception.getMessage());
       return 2;
@@ -143,38 +147,6 @@ public class ClusterCtlCommand implements Callable<Integer> {
   @FunctionalInterface
   interface ConfigAction {
     void run(ClusterCtlConfig config);
-  }
-
-  /**
-   * Prints configuration-aware command and inventory help.
-   */
-  @Dependent
-  @Unremovable
-  @Command(name = "help", description = "Show configured clusters, groups, and apps.")
-  public static class HelpCommand implements Callable<Integer> {
-    private final HelpService helpService;
-
-    @ParentCommand
-    ClusterCtlCommand parent;
-
-    @Parameters(index = "0", arity = "0..1", paramLabel = "[CLUSTER]")
-    String cluster;
-
-    /**
-     * Creates the help command.
-     *
-     * @param helpService configuration help service
-     */
-    public HelpCommand(HelpService helpService) {
-      this.helpService = helpService;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public Integer call() {
-      return parent.invoke("help", config -> helpService.print(
-          config, cluster, parent.spec.commandLine()));
-    }
   }
 
   /**
@@ -192,7 +164,7 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @Parameters(index = "0", paramLabel = "ACTION")
     String action;
 
-    @Parameters(index = "1", arity = "0..1", paramLabel = "[IMAGE_OR_CONTAINER]")
+    @Parameters(index = "1", arity = "0..1", paramLabel = "[IMAGE_OR_CONTAINER]", hideParamSyntax = true)
     String selector;
 
     /**
@@ -226,9 +198,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "1..2",
+    @Parameters(index = "0..*", arity = "0..2", hideParamSyntax = true,
         paramLabel = "[CLUSTER] [USER@]HOST_GROUP_OR_HOST")
-    List<String> arguments;
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the terminal command.
@@ -263,8 +235,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "2..*", paramLabel = "[CLUSTER] HOST_GROUP COMMAND")
-    List<String> arguments;
+    @Parameters(index = "0..*", arity = "0..*", hideParamSyntax = true,
+        paramLabel = "[CLUSTER] HOST_GROUP COMMAND...")
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the remote exec command.
@@ -302,8 +275,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "1..3", paramLabel = "[CLUSTER] HOST_GROUP [USER]")
-    List<String> arguments;
+    @Parameters(index = "0..*", arity = "0..3", hideParamSyntax = true,
+        paramLabel = "[CLUSTER] HOST_GROUP [USER]")
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the authorized-key list command.
@@ -339,9 +313,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "2..5",
+    @Parameters(index = "0..*", arity = "0..5", hideParamSyntax = true,
         paramLabel = "[CLUSTER] HOST_GROUP PUBLIC_KEY_PATH [USER] [verify-required]")
-    List<String> arguments;
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the authorized-key add command.
@@ -365,14 +339,14 @@ public class ClusterCtlCommand implements Callable<Integer> {
         for (String option : resolved.values().subList(2, resolved.values().size())) {
           if (option.equals("verify-required")) {
             if (verifyRequired) {
-              throw new CliException("verify-required was specified more than once.");
+              throw new CliUsageException("verify-required was specified more than once.");
             }
             verifyRequired = true;
           } else if (!userSet) {
             user = option;
             userSet = true;
           } else {
-            throw new CliException("ssh-key-add accepts one user and verify-required.");
+            throw new CliUsageException("ssh-key-add accepts one user and verify-required.");
           }
         }
         hostService.addKey(
@@ -399,9 +373,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "2..4",
+    @Parameters(index = "0..*", arity = "0..4", hideParamSyntax = true,
         paramLabel = "[CLUSTER] HOST_GROUP MATCHING_STRING [USER]")
-    List<String> arguments;
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the authorized-key removal command.
@@ -439,9 +413,9 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "1..3",
+    @Parameters(index = "0..*", arity = "0..3", hideParamSyntax = true,
         paramLabel = "[CLUSTER] ENVIRONMENT [PROJECTS]")
-    List<String> arguments;
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the build command.
@@ -477,9 +451,10 @@ public class ClusterCtlCommand implements Callable<Integer> {
     @ParentCommand
     ClusterCtlCommand parent;
 
-    @Parameters(index = "0..*", arity = "2..3",
+    // The label describes the complete argument tuple, not each individual value.
+    @Parameters(index = "0..*", arity = "0..3", hideParamSyntax = true,
         paramLabel = "[CLUSTER] ENVIRONMENT APP_OR_GROUP")
-    List<String> arguments;
+    List<String> arguments = new ArrayList<>();
 
     /**
      * Creates the deploy command.

@@ -19,6 +19,9 @@ import org.junit.jupiter.api.Test;
  */
 class ProcessRunnerTest {
   private static final String READY = "\u001B[32mready\u001B[0m";
+  private static final String ORANGE = "\u001B[38;5;208m";
+  private static final String RESET = "\u001B[0m";
+  private static final String ERROR_PROMPT = "warning: caf\u00e9> ";
 
   private static List<String> javaCommand(Class<?> entryPoint) {
     return List.of(
@@ -51,6 +54,60 @@ class ProcessRunnerTest {
         process.destroyForcibly();
       }
     }
+  }
+
+  @Test
+  void streamsOrangeStderrWithoutWaitingForANewlineAndKeepsStdoutUnchanged() throws Exception {
+    Process process = new ProcessBuilder(javaCommand(OrangeErrorInvocation.class)).start();
+    try (var readers = Executors.newVirtualThreadPerTaskExecutor();
+        var stderr = new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8)) {
+      try {
+        String prompt = readers.submit(() -> {
+          StringBuilder output = new StringBuilder();
+          int character;
+          while ((character = stderr.read()) != -1) {
+            output.append((char) character);
+            String text = output.toString();
+            if (text.replace(ORANGE, "").replace(RESET, "").equals(ERROR_PROMPT)
+                && text.endsWith(RESET)) {
+              return text;
+            }
+          }
+          return output.toString();
+        }).get(10, TimeUnit.SECONDS);
+
+        assertTrue(prompt.startsWith(ORANGE), prompt);
+        assertTrue(prompt.endsWith(RESET), prompt);
+        assertEquals(ERROR_PROMPT, prompt.replace(ORANGE, "").replace(RESET, ""));
+        assertTrue(process.isAlive());
+        process.getOutputStream().write("continue\n".getBytes(StandardCharsets.UTF_8));
+        process.getOutputStream().close();
+
+        assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+        assertEquals(7, process.exitValue());
+        StringBuilder remaining = new StringBuilder();
+        int character;
+        while ((character = stderr.read()) != -1) {
+          remaining.append((char) character);
+        }
+        assertEquals("finished\n", remaining.toString().replace(ORANGE, "").replace(RESET, ""));
+        assertTrue(remaining.toString().endsWith(RESET), remaining.toString());
+        assertEquals(READY + "\ndone\n", new String(
+            process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+      } finally {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+      }
+    }
+  }
+
+  @Test
+  void orangeStderrDryRunDoesNotLaunchTheProgram() {
+    ProcessResult result = new ProcessRunner().runWithOrangeStderr(new ProcessRequest(
+        List.of("cluster-ctl-nonexistent-test-program"), null, null, true, true));
+
+    assertEquals(0, result.exitCode());
+    assertEquals("", result.output());
   }
 
   @Test
@@ -87,6 +144,49 @@ class ProcessRunnerTest {
         throw new IllegalStateException("Attached output must not be captured.");
       }
       System.exit(result.exitCode());
+    }
+  }
+
+  /**
+   * Launches the colored-stderr runner without changing inherited stdin.
+   */
+  public static class OrangeErrorInvocation {
+    /**
+     * Runs a child and checks that coloring does not modify captured stdout.
+     *
+     * @param arguments unused
+     */
+    public static void main(String[] arguments) {
+      ProcessResult result = new ProcessRunner().runWithOrangeStderr(new ProcessRequest(
+          javaCommand(OrangeErrorChild.class), null, null, false, true));
+      if (!result.output().equals(READY + "\ndone\n")) {
+        throw new IllegalStateException("Captured stdout must remain unchanged.");
+      }
+      System.exit(result.exitCode());
+    }
+  }
+
+  /**
+   * Emits a UTF-8 stderr prompt without a newline, then waits for input.
+   */
+  public static class OrangeErrorChild {
+    /**
+     * Produces independent stdout and stderr before and after the input gate.
+     *
+     * @param arguments unused
+     * @throws Exception when stdin cannot be read
+     */
+    public static void main(String[] arguments) throws Exception {
+      System.out.print(READY + "\n");
+      System.out.flush();
+      System.err.print(ERROR_PROMPT);
+      System.err.flush();
+      new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)).readLine();
+      System.err.print("finished\n");
+      System.err.flush();
+      System.out.print("done\n");
+      System.out.flush();
+      System.exit(7);
     }
   }
 

@@ -6,7 +6,7 @@ and uses replaceable Quarkus/CDI services. No JVM is required at runtime.
 
 ## Install
 
-The [installer](scripts/install.sh) works from Bash and Zsh and selects Linux
+The [installer](scripts/install.sh) works with Bash and Zsh and selects Linux
 x86-64, Linux ARM64, or macOS Apple Silicon automatically. It downloads public
 GitHub Release assets, verifies SHA-256 and the executable version, then
 installs `cluster-ctl` into `~/.local/bin`. No GitHub token, Maven, or Java is
@@ -67,7 +67,7 @@ cluster-ctl --config ./config.yaml help c1
 For CPTM, the config is available in the `klipingmm` repository. With repository
 access, clone it under `~/projects/mm` and point `cluster-ctl` to its client config:
 
-Setup project if not already:
+Set up the project if not already:
 ```sh
 mkdir -p "$HOME/projects/mm"
 cd "$HOME/projects/mm"
@@ -105,8 +105,7 @@ export CLUSTER_CTL_CONF_PATH="$HOME/projects/dc/systems/client/dc.yaml"
 cluster-ctl help
 ```
 
-If already cloned, only the `export` is needed. Add the desired config-path
-export to `~/.bashrc` or `~/.zshrc` to select CPTM or DC in future shell sessions.
+If already cloned, only the `export` is needed. Add the desired config-path export to `~/.bashrc` or `~/.zshrc` to select CPTM or DC in future shell sessions.
 
 ## Commands
 
@@ -118,7 +117,7 @@ those environment variables explicitly. Dry-runs show placeholders for missing
 environment values and for session IDs returned at runtime.
 
 `cluster-ctl help [CLUSTER]` prints the syntax and description of every command
-enabled by the active YAML configuration, followed by the configured cluster
+config path: the active YAML configuration, followed by the configured cluster
 inventory.
 
 Each `exec` target is displayed in its own colored block. The header contains
@@ -132,7 +131,7 @@ cluster-ctl docker start|run
 cluster-ctl docker stop|kill
 cluster-ctl docker log|tail CONTAINER
 cluster-ctl term [CLUSTER] [USER@]HOST_GROUP_OR_HOST
-cluster-ctl exec [CLUSTER] HOST_GROUP_OR_HOST "REMOTE COMMAND"
+cluster-ctl exec [CLUSTER] HOST_GROUP; otherwise, it usesEMOTE COMMAND"
 cluster-ctl ssh-key-list [CLUSTER] HOST_GROUP_OR_HOST [USER]
 cluster-ctl ssh-key-add [CLUSTER] HOST_GROUP_OR_HOST PUBLIC_KEY_PATH [USER] [verify-required]
 cluster-ctl ssh-key-remove [CLUSTER] HOST_GROUP_OR_HOST MATCHING_STRING [USER]

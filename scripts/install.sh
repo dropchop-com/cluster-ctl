@@ -12,9 +12,8 @@ installer_error() {
 installer_usage() {
   printf '%s\n' \
     'Usage: sh install.sh [--version VERSION] [--install-dir DIRECTORY]' \
-    'Defaults: version 0.1.0, binary in ~/.local/bin, example in ~/.config/cluster-ctl.' \
-    'Public GitHub Release downloads do not require a token.' \
-    'Optional: CLUSTER_CTL_INSTALL_DIR, CLUSTER_CTL_CONFIG_DIR, CLUSTER_CTL_RELEASE_URL.'
+    'Defaults: version 0.1.0, binary in ~/.local/bin.' \
+    'Public GitHub Release downloads do not require a token.'
 }
 
 # Remove only temporary paths created by this invocation.
@@ -42,7 +41,7 @@ installer_detect_platform() {
 # Download public assets over HTTPS without credentials or a user curl config.
 installer_download() {
   curl --disable --fail --silent --show-error --location \
-    --proto "$installer_protocols" --proto-redir '=https' \
+    --proto '=https' --proto-redir '=https' \
     --connect-timeout 15 --max-time 300 --retry 3 \
     --output "$2" "$1" ||
     installer_error 'Download failed. Check that this version/platform has a published public GitHub Release.'
@@ -62,12 +61,11 @@ installer_verify_checksum() {
   [ "$installer_actual" = "$installer_expected" ] || installer_error 'SHA-256 checksum mismatch; nothing installed.'
 }
 
-# Fetch, verify, and install without editing shell startup files or active config.
+# Fetch, verify, and install only the binary without creating configuration files.
 installer_main() {
   installer_version=0.1.0
-  installer_bin_dir=${CLUSTER_CTL_INSTALL_DIR:-"${HOME:?HOME must be set}/.local/bin"}
-  installer_config_dir=${CLUSTER_CTL_CONFIG_DIR:-"${XDG_CONFIG_HOME:-$HOME/.config}/cluster-ctl"}
-  installer_release_url=${CLUSTER_CTL_RELEASE_URL:-https://github.com/dropchop-com/cluster-ctl/releases/download}
+  installer_bin_dir=${HOME:?HOME must be set}/.local/bin
+  installer_release_url=https://github.com/dropchop-com/cluster-ctl/releases/download
   installer_temp=
   installer_staged_binary=
   while [ "$#" -gt 0 ]; do
@@ -93,15 +91,6 @@ installer_main() {
     /*) ;;
     *) installer_error 'The installation directory must be an absolute path.' ;;
   esac
-  case "$installer_config_dir" in
-    /*) ;;
-    *) installer_error 'The configuration directory must be an absolute path.' ;;
-  esac
-  case "$installer_release_url" in
-    https://*) installer_protocols='=https' ;;
-    http://127.0.0.1:*|http://localhost:*) installer_protocols='=http,https' ;;
-    *) installer_error 'Release mirrors must use HTTPS (HTTP is allowed only on localhost).' ;;
-  esac
   for installer_tool in curl tar mktemp uname awk; do
     command -v "$installer_tool" >/dev/null 2>&1 || installer_error "Missing required tool: $installer_tool"
   done
@@ -125,24 +114,18 @@ installer_main() {
   # Extract exact members to explicit files; never unpack arbitrary archive paths.
   tar -xzOf "$installer_temp/archive.tar.gz" "$installer_bundle/cluster-ctl" > "$installer_temp/cluster-ctl" ||
     installer_error 'The archive does not contain the expected executable.'
-  tar -xzOf "$installer_temp/archive.tar.gz" "$installer_bundle/config.example.yaml" > "$installer_temp/config.example.yaml" ||
-    installer_error 'The archive does not contain the example configuration.'
   chmod 700 "$installer_temp/cluster-ctl"
   installer_binary_version=$("$installer_temp/cluster-ctl" --version) ||
     installer_error 'The executable cannot run on this host; check OS/runtime compatibility.'
   [ "$installer_binary_version" = "cluster-ctl $installer_version" ] ||
     installer_error 'Executable version does not match the requested version.'
-  mkdir -p "$installer_bin_dir" "$installer_config_dir"
+  mkdir -p "$installer_bin_dir"
   installer_staged_binary=$(mktemp "$installer_bin_dir/.cluster-ctl.XXXXXXXX")
   cp "$installer_temp/cluster-ctl" "$installer_staged_binary"
   chmod 755 "$installer_staged_binary"
-  # Preserve an existing example and never write or replace config.yaml.
-  if [ ! -e "$installer_config_dir/config.example.yaml" ] && [ ! -L "$installer_config_dir/config.example.yaml" ]; then
-    cp -n "$installer_temp/config.example.yaml" "$installer_config_dir/config.example.yaml"
-  fi
   mv -f "$installer_staged_binary" "$installer_target"
   installer_staged_binary=
-  printf 'Installed %s\nExample configuration: %s/config.example.yaml\n' "$installer_target" "$installer_config_dir"
+  printf 'Installed %s\n' "$installer_target"
   case ":${PATH:-}:" in
     *":$installer_bin_dir:"*) ;;
     *) printf 'Add this directory to PATH in ~/.bashrc or ~/.zshrc: %s\n' "$installer_bin_dir" ;;

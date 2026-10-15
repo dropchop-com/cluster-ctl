@@ -45,7 +45,8 @@ selection, aliases, multi-cluster routing, and legacy Compose behavior. All
 external commands run in dry-run mode.
 
 The installer tests use offline fixture packages to cover sh, Bash, and Zsh,
-platform detection, token-free downloads, reinstalls, and config preservation.
+platform detection, token-free downloads, binary-only installation, reinstalls,
+and config preservation.
 Release tests use synthetic assets and a mock GitHub CLI to check checksum
 preflight, draft ordering, failure handling, and preview behavior.
 

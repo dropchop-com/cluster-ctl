@@ -23,9 +23,9 @@ Add the `PATH` export to `~/.bashrc` or `~/.zshrc` if needed; the installer does
 not edit shell startup files. To review the installer first, download it to a
 file, inspect it, then run `sh install.sh --version 0.1.0`.
 
-Use `--install-dir /absolute/path` to choose a
-different binary directory. Existing examples and active configurations
-are left untouched; successful reinstalls replace only the executable.
+Use `--install-dir /absolute/path` to choose a different binary directory.
+The installer installs only the executable; it does not create configuration
+directories or files. Successful reinstalls replace only the executable.
 
 Requirements are `curl`, `tar`, and `sha256sum` or `shasum`; Linux needs glibc
 2.34 or newer. Installation becomes available once the source repository is
@@ -36,7 +36,7 @@ public and the selected version/platform has a published GitHub Release.
 ### General
 
 The installed executable is named **`cluster-ctl`** on every supported platform.
-Start with the installed example or [config.example.yaml](config.example.yaml),
+Start with [config.example.yaml](config.example.yaml),
 copy it to your own YAML file, and customize its hosts and paths:
 
 ```sh

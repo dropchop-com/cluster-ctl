@@ -1,8 +1,8 @@
 # cluster-ctl
 
-`cluster-ctl` is a native command-line utility for cluster operations, terminal
-sessions, Docker, builds, and deployment. It reads external YAML configuration
-and uses replaceable Quarkus/CDI services. No JVM is required at runtime.
+`cluster-ctl` is a command-line utility for managing clusters, opening terminal
+sessions, running Docker commands, building applications, and deploying artifacts.
+Hosts, environments, and applications are defined in an external YAML configuration.
 
 ## Install
 

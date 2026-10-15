@@ -31,8 +31,10 @@ import picocli.CommandLine.Help.ColorScheme;
 @ApplicationScoped
 public class HelpService {
   private static final int OUTPUT_WIDTH = 150;
-  private static final int INVENTORY_COLUMN_WIDTH = 72;
-  private static final int APPLICATION_COLUMN_WIDTH = 25;
+  private static final int INVENTORY_GROUP_COLUMN_WIDTH = 50;
+  private static final int INVENTORY_COLUMN_WIDTH = 60;
+  private static final int APPLICATION_GROUP_COLUMN_WIDTH = 20;
+  private static final int APPLICATION_COLUMN_WIDTH = 30;
   private static final String COLUMN_SEPARATOR = " | ";
   private static final ColorScheme COLORS = new ColorScheme.Builder(Ansi.ON).build();
   private static final ColorScheme PLAIN = new ColorScheme.Builder(Ansi.OFF).build();
@@ -256,7 +258,7 @@ public class HelpService {
       Text groupLabel = withAliases(colored(group.name, Style.fg_yellow), group.aliases);
       rows.add(List.of(groupLabel, plain(hosts.isEmpty() ? "-" : hosts)));
     }
-    printTable(out, List.of("Group (aliases)", "Hosts"), rows, INVENTORY_COLUMN_WIDTH, INVENTORY_COLUMN_WIDTH);
+    printTable(out, List.of("Group (aliases)", "Hosts"), rows, INVENTORY_GROUP_COLUMN_WIDTH, INVENTORY_COLUMN_WIDTH);
   }
 
   private void printApplications(PrintWriter out, ClusterCtlConfig config, String cluster) {
@@ -271,7 +273,7 @@ public class HelpService {
         .map(entry -> List.of(colored(entry.getKey().group(), Style.fg_yellow),
             withAliases(plain(entry.getKey().name()), List.copyOf(entry.getValue()))))
         .toList();
-    printTable(out, List.of("Application group", "Application"), rows, APPLICATION_COLUMN_WIDTH, APPLICATION_COLUMN_WIDTH);
+    printTable(out, List.of("Application group", "Application"), rows, APPLICATION_GROUP_COLUMN_WIDTH, APPLICATION_COLUMN_WIDTH);
   }
 
   private String display(String value) {

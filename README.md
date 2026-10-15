@@ -76,7 +76,7 @@ git clone https://github.com/dropchop-com/klipingmm.git
 Add to your environment `.zshrc` or `.bashrc`:
 ```sh
 export KLIPING_MM_ROOT="$HOME/projects/mm/klipingmm"
-alias cptm-ctl=CLUSTER_CTL_CONF_PATH="${KLIPING_MM_ROOT}/system/client/cptm.yaml cluster-ctl"
+alias cptm-ctl="CLUSTER_CTL_CONF_PATH=${KLIPING_MM_ROOT}/system/client/cptm.yaml cluster-ctl"
 ```
 
 ### Dropchop
@@ -92,8 +92,7 @@ git clone https://github.com/dropchop-com/systems.git
 ```
 Add to your environment `.zshrc` or `.bashrc`:
 ```sh
-export DROPCHOP_SYS_ROOT="$HOME/projects/dc/systems"
-alias cptm-ctl=CLUSTER_CTL_CONF_PATH="${DROPCHOP_SYS_ROOT}/system/client/dc.yaml cluster-ctl"
+alias dc-ctl="CLUSTER_CTL_CONF_PATH=${HOME}/projects/dc/systems/client/dc.yaml cluster-ctl"
 ```
 
 ## Commands

@@ -148,6 +148,9 @@ public class ClusterCtlConfig {
     @JsonProperty("ssh-user")
     public String sshUser = "root";
 
+    @JsonProperty("ssh-proxy")
+    public String sshProxy;
+
     public List<String> users = new ArrayList<>();
   }
 

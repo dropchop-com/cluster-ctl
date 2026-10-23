@@ -68,7 +68,7 @@ public class ClusterCtlCommandTest {
     for (String flag : List.of("-h", "--help")) {
       assertSuccess(launcher.launch(flag));
       for (String command : List.of("docker", "term", "exec", "ssh-key-list", "ssh-key-add",
-          "ssh-key-remove", "build", "deploy")) {
+          "ssh-key-remove", "build", "deploy", "self-upgrade")) {
         LaunchResult result = launcher.launch("--dry-run", command, flag);
 
         assertSuccess(result);
@@ -94,6 +94,19 @@ public class ClusterCtlCommandTest {
       assertTrue(result.getOutput().contains("Examples"), combined(result));
       assertFalse(result.getOutput().contains("$ "), combined(result));
     }
+  }
+
+  @Test
+  void selfUpgradeIgnoresClusterConfigAndRefusesJvmReplacement(QuarkusMainLauncher launcher) {
+    LaunchResult help = launcher.launch("--config", "/missing-config.yaml", "self-upgrade", "--help");
+    assertSuccess(help);
+    assertTrue(help.getOutput().contains("self-upgrade"), combined(help));
+    LaunchResult execution = launcher.launch("--config", "/missing-config.yaml", "self-upgrade");
+    assertEquals(2, execution.exitCode(), combined(execution));
+    assertTrue(execution.getErrorOutput().contains("requires an installed native executable"), combined(execution));
+    LaunchResult invalid = launcher.launch("self-upgrade", "extra");
+    assertEquals(2, invalid.exitCode(), combined(invalid));
+    assertTrue(invalid.getOutput().contains("Usage: cluster-ctl self-upgrade"), combined(invalid));
   }
 
   @Test

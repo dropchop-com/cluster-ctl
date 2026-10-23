@@ -18,6 +18,7 @@ remote:
       cluster: c1
       aliases: [host-1]
       ssh-user: root
+      ssh-proxy: "" # Optional: operator@bastion.example.test:2222
   groups:
     - name: hosts
       cluster: c1

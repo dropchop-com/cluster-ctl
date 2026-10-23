@@ -87,6 +87,21 @@ class KonsoleTerminalStrategyTest {
   }
 
   @Test
+  void appliesProxyPerHostWhileOverridingOnlyDestinationLogin() {
+    RecordingRunner runner = new RecordingRunner();
+    ClusterCtlConfig.Host proxied = host("node.example.test", "node-1");
+    proxied.sshProxy = "test-proxy@jump.example.test:2222,second@internal.example.test";
+    ClusterCtlConfig.Host direct = host("direct.example.test", "node-2");
+
+    new KonsoleTerminalStrategy(runner, ENVIRONMENT, tool -> true).open(
+        new TerminalRequest("alpha", "nodes", List.of(proxied, direct), true, "operator"));
+
+    assertEquals("ssh -J test-proxy@jump.example.test:2222,second@internal.example.test "
+        + "operator@node.example.test", runner.requests.get(2).command().getLast());
+    assertEquals("ssh operator@direct.example.test", runner.requests.get(6).command().getLast());
+  }
+
+  @Test
   void fallsBackToQdbus6WithUntypedResponsesAndArguments() {
     RecordingRunner runner = new RecordingRunner(new ProcessResult(0, "8\n"));
     KonsoleTerminalStrategy strategy = new KonsoleTerminalStrategy(

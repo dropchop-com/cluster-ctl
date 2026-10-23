@@ -37,12 +37,17 @@ Run the dispatch tests:
 ./mvnw test
 sh src/test/sh/install-test.sh
 sh src/test/sh/release-test.sh
+sh src/test/sh/release-profile-test.sh
 ```
 
 The tests launch the real Quarkus main application and cover help routing, Docker,
 terminal, exec, all three SSH-key commands, Maven build selection, SCP deploy
-selection, aliases, multi-cluster routing, and legacy Compose behavior. All
-external commands run in dry-run mode.
+selection, aliases, multi-cluster routing, and legacy Compose behavior. Cluster
+operations run in dry-run mode. Upgrade tests use a loopback HTTP server and
+disposable fixture executables: no real installation is replaced or public
+release downloaded. They cover numeric version comparison, SHA-256 checks,
+safe archive extraction, version probing, symlinks, permissions, concurrent
+changes, failed downloads, and atomic replacement failures.
 Help checks cover flag handling and inventory scope without locking in spacing
 or table-layout snapshots.
 
@@ -87,9 +92,9 @@ Actions or CI/CD. Build each target on a matching OS/architecture:
 
 | Target | Release asset | Platform |
 | --- | --- | --- |
-| Linux x86-64 | `cluster-ctl-0.1.0-linux-amd64.tar.gz` | `linux-amd64` |
-| Linux ARM64 | `cluster-ctl-0.1.0-linux-arm64.tar.gz` | `linux-arm64` |
-| macOS Apple Silicon | `cluster-ctl-0.1.0-macos-arm64.tar.gz` | `macos-arm64` |
+| Linux x86-64 | `cluster-ctl-0.1.2-linux-amd64.tar.gz` | `linux-amd64` |
+| Linux ARM64 | `cluster-ctl-0.1.2-linux-arm64.tar.gz` | `linux-arm64` |
+| macOS Apple Silicon | `cluster-ctl-0.1.2-macos-arm64.tar.gz` | `macos-arm64` |
 
 Linux builds use the UBI 9 Mandrel JDK 25 builder for glibc 2.34 or newer.
 All builds use `quarkus.native.march=compatibility` for baseline CPU instructions.
@@ -115,7 +120,7 @@ environment YAML, legacy samples, and credentials are excluded.
 ### Publish GitHub Release assets
 
 Collect all three archives and their `.sha256` files in one machine's
-`target/release`. The default publishing destination is GitHub Releases,
+`target/release`. Publishing uses GitHub Releases,
 which permits token-free installation when the repository is public.
 
 Maintainers need GitHub CLI (`gh`) and a login with repository write access.
@@ -125,10 +130,14 @@ matching the Maven version before publishing:
 
 ```bash
 gh auth login
-git tag v0.1.0
-git push origin v0.1.0
-./mvnw -f release/pom.xml deploy
+git tag v0.1.2
+git push origin v0.1.2
+./mvnw -Ppublish-release deploy
 ```
+
+The `publish-release` profile publishes existing archives without compiling or
+running application tests. Do not add `clean`: it removes the collected archives
+from `target/release`. The version comes from the main `pom.xml`.
 
 The publisher checks every archive/checksum and expected archive members before
 contacting GitHub. It requires a public repository and an already-pushed tag,
@@ -137,14 +146,8 @@ are not overwritten. Failed uploads may leave a draft for manual review/repair;
 the script does not delete it automatically.
 See [GitHub CLI release creation](https://cli.github.com/manual/gh_release_create).
 
-Preview publishing without a login, uploads, or registry deployment:
-
-```bash
-./mvnw -f release/pom.xml -Prelease-preview deploy
-```
-
-The `release-preview` profile also disables optional package uploads. It activates
-automatically with `-Drelease.dry-run=true`.
+For safe validation without login or uploads, optionally add
+`-Drelease.dry-run=true`.
 Use `-Drelease.directory=/absolute/path/to/archives` for another collection directory
 or `-Drelease.github.repository=OWNER/REPO` for a different GitHub repository.
 
@@ -155,54 +158,13 @@ For an intentionally single-platform release, build and publish directly:
 ```
 
 That release includes only the current platform; collect all three targets and
-use `release/pom.xml` instead for the complete release. Do not publish a partial
+use `-Ppublish-release` instead for the complete release. Do not publish a partial
 release first if you plan to publish all targets under the same version.
 
-For a new version, update both POMs, build the committed sources, and push the
+For a new version, update the main POM, build the committed sources, and push the
 matching `vVERSION` tag. Tags do not trigger builds; Maven publishing does not
 create or push tags.
-
-### Optional GitHub Packages
-
-GitHub Packages is disabled by default and is not used by the shell installer.
-To additionally publish Maven archives, enable `github-packages`:
-
-```bash
-./mvnw -f release/pom.xml -Pgithub-packages deploy
-```
-
-To publish only Maven packages, add `-Drelease.github.skip=true`.
-For a single platform, use `-Pnative-release,github-packages` with the root POM.
-The registry is `https://maven.pkg.github.com/dropchop-com/cluster-ctl`, with
-coordinates `com.dropchop.systems:cluster-ctl-native:0.1.0:tar.gz:PLATFORM`.
-
-### GitHub Packages authentication
-
-Unlike public GitHub Release downloads, the Maven registry requires a classic
-personal access token even for public packages. Publishing needs `write:packages`;
-downloads need `read:packages`. Private repository access additionally needs
-`repo` and any required organization SSO authorization.
-See [GitHub's Maven authentication documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
-
-Maven uses your existing `~/.m2/settings.xml`. Merge or reuse this server entry;
-do not replace the whole file or commit credentials:
-
-```xml
-<settings>
-  <servers>
-    <server>
-      <id>github</id>
-      <username>YOUR_GITHUB_USERNAME</username>
-      <password>${env.GITHUB_TOKEN}</password>
-    </server>
-  </servers>
-</settings>
-```
-
-Keep existing Maven credential configuration if preferred. For a different
-server ID, add `-Drelease.repository.id=YOUR_SERVER_ID`; use that ID in
-`-DremoteRepositories` for downloads as well.
-
+v2NARsJi3XYNkuMmiQZX
 ## Before making the repository public
 
 Review the committed tree, all reachable history and tags, and hosted workflow

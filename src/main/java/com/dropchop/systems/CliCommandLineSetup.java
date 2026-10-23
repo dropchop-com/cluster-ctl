@@ -35,6 +35,10 @@ public class CliCommandLineSetup {
   }
 
   private int printHelp(CommandLine root, CommandLine command) {
+    if (command.getCommandName().equals("self-upgrade")) {
+      helpService.print(null, root, command);
+      return 0;
+    }
     ClusterCtlCommand application = root.getCommand();
     ClusterCtlConfig config = null;
     try {

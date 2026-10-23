@@ -16,6 +16,7 @@ import com.dropchop.systems.service.BuildService;
 import com.dropchop.systems.service.DeploymentService;
 import com.dropchop.systems.service.DockerService;
 import com.dropchop.systems.service.HostService;
+import com.dropchop.systems.service.SelfUpgradeService;
 import com.dropchop.systems.service.TerminalService;
 
 import io.quarkus.arc.Unremovable;
@@ -46,7 +47,8 @@ import picocli.CommandLine.Model.CommandSpec;
         ClusterCtlCommand.SshKeyAddCommand.class,
         ClusterCtlCommand.SshKeyRemoveCommand.class,
         ClusterCtlCommand.BuildCommand.class,
-        ClusterCtlCommand.DeployCommand.class
+        ClusterCtlCommand.DeployCommand.class,
+        ClusterCtlCommand.SelfUpgradeCommand.class
     })
 public class ClusterCtlCommand implements Callable<Integer> {
   private final ConfigLoader configLoader;
@@ -63,7 +65,7 @@ public class ClusterCtlCommand implements Callable<Integer> {
 
   @Option(
       names = "--dry-run",
-      description = "Print external commands without executing them.",
+      description = "Preview operations without changing files or executing external commands.",
       scope = CommandLine.ScopeType.INHERIT)
   boolean dryRun;
 
@@ -147,6 +149,43 @@ public class ClusterCtlCommand implements Callable<Integer> {
   @FunctionalInterface
   interface ConfigAction {
     void run(ClusterCtlConfig config);
+  }
+
+  /**
+   * Upgrades the running native executable without requiring cluster configuration.
+   */
+  @Dependent
+  @Unremovable
+  @Command(name = "self-upgrade", description = "Upgrade this executable to the latest stable release.")
+  public static class SelfUpgradeCommand implements Callable<Integer> {
+    private final SelfUpgradeService upgrades;
+
+    @ParentCommand
+    ClusterCtlCommand parent;
+
+    @Spec
+    CommandSpec spec;
+
+    /**
+     * Creates the configuration-independent upgrade command.
+     *
+     * @param upgrades native upgrade workflow
+     */
+    public SelfUpgradeCommand(SelfUpgradeService upgrades) {
+      this.upgrades = upgrades;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer call() {
+      try {
+        upgrades.execute(parent.dryRun, spec.commandLine().getOut());
+        return 0;
+      } catch (CliException exception) {
+        spec.commandLine().getErr().println("Error: " + exception.getMessage());
+        return 2;
+      }
+    }
   }
 
   /**

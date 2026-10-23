@@ -6,13 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import com.dropchop.systems.cli.CliException;
 import com.dropchop.systems.config.ClusterCtlConfig;
+import com.dropchop.systems.config.ConfigLoader;
 import com.dropchop.systems.process.ProcessRequest;
 import com.dropchop.systems.process.ProcessResult;
 import com.dropchop.systems.process.ProcessRunner;
@@ -66,6 +70,56 @@ class SshRemoteControlStrategyTest {
     CliException exception = assertThrows(CliException.class,
         () -> strategy.execute(host(), "hostname", false));
     assertTrue(exception.getMessage().contains("exit code 255"), exception.getMessage());
+  }
+
+  @Test
+  void routesExecAndKeyOperationsThroughProxyLoadedFromYaml(@TempDir Path directory) throws Exception {
+    for (String proxy : List.of("test-proxy@jump.example.test:2222",
+        "test-proxy@jump.example.test:2222,second@internal.example.test")) {
+      Path yaml = directory.resolve("proxy.yaml");
+      Files.writeString(yaml, """
+          remote:
+            clusters:
+              - name: alpha
+            hosts:
+              - name: node.example.test
+                cluster: alpha
+                ssh-user: test-admin
+                ssh-proxy: "%s"
+          """.formatted(proxy));
+      ClusterCtlConfig.Host host = new ConfigLoader().load(yaml.toString()).remote.hosts.getFirst();
+      assertEquals(proxy, host.sshProxy);
+      RecordingRunner runner = new RecordingRunner();
+      SshRemoteControlStrategy strategy = new SshRemoteControlStrategy(runner);
+
+      strategy.execute(host, "hostname", true);
+      strategy.listKeys(host, "test-user", true);
+      strategy.addKey(host, "test-user", "fixture-key", false, true);
+      strategy.findKeys(host, "test-user", "matching-key", true);
+      strategy.removeKeys(host, "test-user", "matching-key", true);
+
+      assertEquals(5, runner.requests.size());
+      for (ProcessRequest request : runner.requests) {
+        assertEquals(List.of("ssh", "-J", proxy, "test-admin@node.example.test", "-T"),
+            request.command().subList(0, 5));
+        assertTrue(request.dryRun());
+      }
+      assertEquals("hostname", runner.requests.getFirst().command().getLast());
+    }
+  }
+
+  @Test
+  void blankProxyPreservesDirectConnections() {
+    for (String proxy : List.of("", "   ")) {
+      ClusterCtlConfig.Host host = host();
+      host.sshProxy = proxy;
+      RecordingRunner runner = new RecordingRunner();
+
+      new SshRemoteControlStrategy(runner).execute(host, "hostname", true);
+
+      assertEquals(List.of("ssh", "test-admin@node.example.test", "-T", "hostname"),
+          runner.requests.getFirst().command());
+    }
   }
 
   @Test

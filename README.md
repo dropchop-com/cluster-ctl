@@ -31,6 +31,32 @@ Requirements are `curl`, `tar`, and `sha256sum` or `shasum`; Linux needs glibc
 2.34 or newer. Installation becomes available once the source repository is
 public and the selected version/platform has a published GitHub Release.
 
+### Upgrade
+
+```sh
+cluster-ctl self-upgrade
+```
+
+This checks the [latest stable GitHub Release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)
+from `dropchop-com/cluster-ctl` and installs it only when its version is newer.
+It downloads the matching native archive, verifies SHA-256 and the executable's
+reported version, then atomically
+replaces the running executable. No token, YAML configuration, `curl`, or `tar`
+is required. Configuration files and shell aliases are untouched.
+
+To check availability without downloading or replacing the executable:
+
+```sh
+cluster-ctl --dry-run self-upgrade
+```
+
+Renamed binaries are upgraded in place; invocation symlinks are preserved and
+their targets upgraded. The installation owner needs write access to the binary's
+directory. Permissions and ownership are preserved, and a failed verification or
+replacement leaves the current executable in place. No automatic privilege
+elevation or downgrade is attempted. Run the command again after a successful
+upgrade to use the new version. JVM launches cannot self-upgrade.
+
 ## Setup
 
 ### General
@@ -142,6 +168,7 @@ cluster-ctl ssh-key-add [CLUSTER] HOST_GROUP_OR_HOST PUBLIC_KEY_PATH [USER] [ver
 cluster-ctl ssh-key-remove [CLUSTER] HOST_GROUP_OR_HOST MATCHING_STRING [USER]
 cluster-ctl build [CLUSTER] ENVIRONMENT [PROJECT_OR_ALIAS]
 cluster-ctl deploy [CLUSTER] ENVIRONMENT APP_OR_GROUP
+cluster-ctl self-upgrade
 ```
 
 For cluster operations, the first positional argument after the command is
@@ -156,6 +183,24 @@ selected host. For example, `cluster-ctl term operator@web` connects as `operato
 to the default cluster's `web` group. This also works with individual hosts and
 explicit clusters, such as `cluster-ctl term c2 operator@c2-host-1`. Without the
 prefix, each host's configured `ssh-user` is used.
+
+Set `ssh-proxy` on a host to route `term`, `exec`, and SSH-key operations through
+an SSH jump host:
+
+```yaml
+remote:
+  hosts:
+    - name: host-1.example.test
+      cluster: c1
+      aliases: [host-1]
+      ssh-user: root
+      ssh-proxy: operator@bastion.example.test:2222
+```
+
+The value is passed to `ssh -J`. Use `[user@]host[:port]` for one hop or a
+comma-separated chain for multiple hops. Omit the field or leave it blank for a
+direct connection. A `term USER@...` override changes only the destination login;
+the proxy's user remains as configured.
 
 Examples:
 
@@ -180,6 +225,10 @@ cluster-ctl deploy c1 prod support
 Use `--yes` to pre-authorize deployment and matching-key removal. Key addition
 is idempotent by key type plus key blob. `verify-required` upgrades a matching
 entry rather than adding an unrestricted duplicate.
+
+`deploy` attaches SCP directly to your terminal, showing its normal live transfer
+progress and preserving SSH prompts. As with invoking SCP directly, the progress
+meter is disabled when stdout is redirected or piped instead of connected to a terminal.
 
 `build` attaches Maven's stdout and stderr directly to your terminal, displaying
 progress immediately and preserving Maven's normal colors and interactive input.
@@ -227,7 +276,8 @@ cluster-ctl docker pull
 The top-level sections are:
 
 - `commands`: command names enabled for this installation. Omit or leave empty
-  to allow all installed commands.
+  to allow all configured-operation commands. `self-upgrade` is always available
+  independently of this list and the configuration file.
 - `local`: build strategy/projects and Docker settings.
 - `remote`: clusters, environments, deployment targets, hosts, and composable
   host groups.

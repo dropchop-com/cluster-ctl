@@ -6,9 +6,10 @@
   <groupId>com.dropchop.systems</groupId>
   <artifactId>cluster-ctl</artifactId>
   <version>0.1.2</version>
-  <packaging>quarkus</packaging>
+  <packaging>${packaging.type}</packaging>
 
   <properties>
+    <packaging.type>quarkus</packaging.type>
     <compiler-plugin.version>3.15.0</compiler-plugin.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,9 +24,6 @@
     <release.github.repository>dropchop-com/cluster-ctl</release.github.repository>
     <release.github.skip>false</release.github.skip>
     <release.dry-run>false</release.dry-run>
-    <release.packages.skip>true</release.packages.skip>
-    <release.repository.id>github</release.repository.id>
-    <release.repository.url>https://maven.pkg.github.com/dropchop-com/cluster-ctl</release.repository.url>
   </properties>
 
   <dependencyManagement>
@@ -60,6 +58,10 @@
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -118,6 +120,92 @@
   </build>
 
   <profiles>
+    <!-- Publish collected archives without rebuilding the application. -->
+    <profile>
+      <id>publish-release</id>
+      <properties>
+        <packaging.type>pom</packaging.type>
+        <release.directory>${project.build.directory}/release</release.directory>
+        <release.prefix>${release.directory}/cluster-ctl-${project.version}</release.prefix>
+        <maven.test.skip>true</maven.test.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>validate-publish-only</id>
+                <phase>validate</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <fail message="Use publish-release separately from native and native-release; it only publishes existing archives.">
+                      <condition><equals arg1="${quarkus.native.enabled}" arg2="true"/></condition>
+                    </fail>
+                  </target>
+                </configuration>
+              </execution>
+              <execution>
+                <id>verify-release-checksums</id>
+                <phase>verify</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <checksum file="${release.prefix}-linux-amd64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.linux-amd64"/>
+                    <checksum file="${release.prefix}-linux-arm64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.linux-arm64"/>
+                    <checksum file="${release.prefix}-macos-arm64.tar.gz" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" verifyproperty="checksum.macos-arm64"/>
+                    <fail message="Release archives/checksums are missing or invalid. Build and collect all three targets before deploying.">
+                      <condition>
+                        <not><and>
+                          <equals arg1="${checksum.linux-amd64}" arg2="true"/>
+                          <equals arg1="${checksum.linux-arm64}" arg2="true"/>
+                          <equals arg1="${checksum.macos-arm64}" arg2="true"/>
+                        </and></not>
+                      </condition>
+                    </fail>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-install-plugin</artifactId>
+            <version>3.1.4</version>
+          </plugin>
+          <plugin>
+            <artifactId>maven-deploy-plugin</artifactId>
+            <version>3.2.0</version>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.6.3</version>
+            <executions>
+              <execution>
+                <id>publish-github-release</id>
+                <phase>deploy</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <skip>${release.github.skip}</skip>
+                  <executable>sh</executable>
+                  <arguments>
+                    <argument>${project.basedir}/scripts/publish-release.sh</argument>
+                    <argument>${project.version}</argument>
+                    <argument>${release.directory}</argument>
+                    <argument>${release.github.repository}</argument>
+                    <argument>${release.dry-run}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <!-- Platform profiles describe the host, not a cross-compilation target. -->
     <profile>
       <id>host-linux-amd64</id>
@@ -153,7 +241,7 @@
         <quarkus.native.builder-image>quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25</quarkus.native.builder-image>
         <skipITs>false</skipITs>
         <release.archive>${project.build.directory}/release/cluster-ctl-${project.version}-${release.platform}.tar.gz</release.archive>
-        <!-- Skip the JVM lifecycle artifact; deploy-file publishes the native archive. -->
+        <!-- Publish native archives through GitHub Releases, not a Maven registry. -->
         <maven.install.skip>true</maven.install.skip>
         <maven.deploy.skip>true</maven.deploy.skip>
       </properties>
@@ -212,9 +300,6 @@
                       <arg value="--dry-run"/><arg value="exec"/><arg value="host-1"/><arg value="hostname"/>
                     </exec>
                     <checksum file="${release.archive}" algorithm="SHA-256" fileext=".sha256" pattern="{0}  {1}" forceOverwrite="true"/>
-                    <!-- Maven checksum resources contain just the digest. -->
-                    <checksum file="${release.archive}" algorithm="SHA-256" property="release.archive.sha256"/>
-                    <echo file="${release.archive}.sha256.maven" message="${release.archive.sha256}"/>
                   </target>
                 </configuration>
               </execution>
@@ -245,29 +330,6 @@
           <plugin>
             <artifactId>maven-deploy-plugin</artifactId>
             <version>3.2.0</version>
-            <executions>
-              <execution>
-                <id>publish-native-archive</id>
-                <phase>deploy</phase>
-                <goals><goal>deploy-file</goal></goals>
-                <configuration>
-                  <skip>${release.packages.skip}</skip>
-                  <repositoryId>${release.repository.id}</repositoryId>
-                  <url>${release.repository.url}</url>
-                  <groupId>${project.groupId}</groupId>
-                  <artifactId>cluster-ctl-native</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>tar.gz</packaging>
-                  <classifier>${release.platform}</classifier>
-                  <file>${release.archive}</file>
-                  <files>${release.archive}.sha256.maven</files>
-                  <classifiers>${release.platform}</classifiers>
-                  <types>tar.gz.sha256</types>
-                  <generatePom>true</generatePom>
-                  <retryFailedDeploymentCount>3</retryFailedDeploymentCount>
-                </configuration>
-              </execution>
-            </executions>
           </plugin>
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
@@ -295,20 +357,6 @@
           </plugin>
         </plugins>
       </build>
-    </profile>
-    <profile>
-      <id>github-packages</id>
-      <properties><release.packages.skip>false</release.packages.skip></properties>
-    </profile>
-    <profile>
-      <id>release-preview</id>
-      <activation>
-        <property><name>release.dry-run</name><value>true</value></property>
-      </activation>
-      <properties>
-        <release.dry-run>true</release.dry-run>
-        <release.packages.skip>true</release.packages.skip>
-      </properties>
     </profile>
     <profile>
       <id>native</id>

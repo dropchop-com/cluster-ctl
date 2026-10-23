@@ -1,7 +1,5 @@
 package com.dropchop.systems.remote;
 
-import java.util.List;
-
 import com.dropchop.systems.cli.CliException;
 import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.process.ProcessRequest;
@@ -160,7 +158,7 @@ public class SshRemoteControlStrategy implements RemoteControlStrategy {
                             boolean printOut, String operation) {
     ProcessResult result = processRunner.runWithOrangeStderr(
         new ProcessRequest(
-            List.of("ssh", host.sshUser + "@" + host.name, "-T", remoteCommand), null, input, dryRun, printOut
+            SshCommand.command(host, host.sshUser, "-T", remoteCommand), null, input, dryRun, printOut
         )
     );
     if (result.unsuccessful()) {

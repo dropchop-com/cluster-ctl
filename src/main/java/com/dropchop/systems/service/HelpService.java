@@ -82,6 +82,9 @@ public class HelpService {
       case "deploy" -> List.of(
           new Example("deploy prod web-api", "Deploy an application on the default cluster."),
           new Example("deploy c2 stage services", "Deploy an application group on an explicit cluster."));
+      case "self-upgrade" -> List.of(
+          new Example("self-upgrade", "Install a newer stable version of this executable."),
+          new Example("--dry-run self-upgrade", "Check online without downloading or replacing the executable."));
       default -> List.of(new Example(command + " --help", "Show command usage and options."));
     };
   }
@@ -233,7 +236,8 @@ public class HelpService {
   private void printExamples(PrintWriter out, ClusterCtlConfig config, CommandLine rootCommand, CommandLine command) {
     List<String> enabledCommands = command == rootCommand
         ? rootCommand.getSubcommands().values().stream().map(CommandLine::getCommandName).distinct()
-            .filter(name -> config == null || config.commands.isEmpty() || config.commands.contains(name)).toList()
+            .filter(name -> name.equals("self-upgrade") || config == null
+                || config.commands.isEmpty() || config.commands.contains(name)).toList()
         : List.of(command.getCommandName());
     List<List<Text>> rows = new ArrayList<>();
     for (String commandName : enabledCommands) {

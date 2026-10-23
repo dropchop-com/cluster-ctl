@@ -20,7 +20,7 @@ import com.dropchop.systems.process.ProcessRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Deploys artifacts with SCP and optional adjacent SHA-1 checksum files.
+ * Deploys artifacts with live SCP terminal progress and optional adjacent SHA-1 checksum files.
  */
 @ApplicationScoped
 public class ScpDeploymentStrategy implements DeploymentStrategy {
@@ -93,7 +93,8 @@ public class ScpDeploymentStrategy implements DeploymentStrategy {
   }
 
   private void copy(Path artifact, String target, boolean dryRun) {
-    ProcessResult result = processRunner.run(
+    // SCP checks stdout for a terminal before enabling its progress meter.
+    ProcessResult result = processRunner.runAttached(
         new ProcessRequest(List.of("scp", artifact.toString(), target), null, null, dryRun, true)
     );
     if (result.unsuccessful()) {

@@ -8,6 +8,7 @@ import com.dropchop.systems.config.ClusterCtlConfig;
 import com.dropchop.systems.process.ProcessRequest;
 import com.dropchop.systems.process.ProcessResult;
 import com.dropchop.systems.process.ProcessRunner;
+import com.dropchop.systems.remote.SshCommand;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -23,7 +24,7 @@ final class TerminalSupport {
   }
 
   static List<String> ssh(ClusterCtlConfig.Host host, String sshUser) {
-    return List.of("ssh", sshUser + "@" + host.name);
+    return SshCommand.command(host, sshUser);
   }
 
   static void requireSuccess(ProcessResult result, String terminal) {
